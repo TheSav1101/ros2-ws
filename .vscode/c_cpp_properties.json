@@ -7,7 +7,12 @@
                 "/opt/ros/humble/include/**",
                 "/opt/ros/humble/include/std_msgs",
                 "/opt/ros/humble/include/sensor_msgs",
-                "/usr/include/opencv4"
+                "install/",
+                "/usr/include/opencv4",
+                "${workspaceFolder}/install/hpe_test/share",
+                "${workspaceFolder}/install/hpe_msgs/include/hpe_msgs",
+                "/opt/ros/humble/include/rclcpp",
+                "/opt/ros/humble/include/cv_bridge"
             ],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "${default}",

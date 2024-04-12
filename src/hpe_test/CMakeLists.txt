@@ -33,13 +33,7 @@ list(APPEND cv_bridge_INCLUDE_DIRS "/opt/ros/humble/include/cv_bridge")
 message(WARNING "MANUALLY ADDED INCLUDE DIRECTORIES FOR cv_bridge")
 message(WARNING "cv_bridge_INCLUDE_DIRS: ${cv_bridge_INCLUDE_DIRS}")
 
-
-find_package(rosidl_default_generators REQUIRED)
-
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/Hpe.msg"
-  #DEPENDENCIES geometry_msgs # Add packages that above messages depend on, in this case geometry_msgs for Sphere.msg
-)
+find_package(hpe_msgs REQUIRED)
 
 
 # Include directories
@@ -48,10 +42,13 @@ include_directories(
   ${tensorflow_lite_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${cv_bridge_INCLUDE_DIRS}
+  ${std_msgs_INCLUDE_DIRS}
+  ${cv_bridge_INCLUDE_DIRS}
 )
 
-include_directories(${cv_bridge_INCLUDE_DIRS})
 add_executable(worker src/worker_node.cpp)
+add_executable(visualizer src/visualizer_node.cpp)
+
 # Link libraries
 message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflow_lite")
 list(APPEND tensorflow_lite_LIBRARIES "/usr/lib/libtensorflowlite.so")
@@ -64,11 +61,19 @@ target_link_libraries(worker ${tensorflow_lite_LIBRARIES})
 target_link_libraries(worker ${OpenCV_LIBS})
 target_link_libraries(worker ${cv_bridge_LIBRARIES})
 target_link_libraries(worker ${sensor_msgs_LIBRARIES})
+target_link_libraries(worker ${std_msgs_LIBRARIES})
+
+target_link_libraries(visualizer ${OpenCV_LIBS})
+target_link_libraries(visualizer ${cv_bridge_LIBRARIES})
+target_link_libraries(visualizer ${sensor_msgs_LIBRARIES})
+target_link_libraries(visualizer ${std_msgs_LIBRARIES})
 
 
-ament_target_dependencies(worker rclcpp std_msgs sensor_msgs)
+ament_target_dependencies(worker rclcpp std_msgs sensor_msgs hpe_msgs tensorflow_lite cv_bridge)
+ament_target_dependencies(visualizer rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 install(TARGETS
   worker
+  visualizer
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

@@ -9,15 +9,15 @@
 #include <tensorflow/lite/model.h>
 #include <cv_bridge/cv_bridge.h>
 
-#include <hpe_test/msg/hpe.hpp>
+#include "hpe_msgs/msg/hpe2d.hpp"
 
 using std::placeholders::_1;
-const std::string model_file = "./models/movenet-singlepose-lightning.tflite";
-
+// const std::string model_file = "./models/movenet-singlepose-lightning.tflite";
+const std::string model_file = "./models/4.tflite";
 class WorkerNode : public rclcpp::Node
 {
 private:
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
+    rclcpp::Publisher<hpe_msgs::msg::Hpe2d>::SharedPtr publisher_;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
     std::unique_ptr<tflite::FlatBufferModel> model;
     std::unique_ptr<tflite::Interpreter> interpreter;
@@ -47,7 +47,7 @@ private:
         catch (cv_bridge::Exception &e)
         {
 
-            RCLCPP_ERROR(this->get_logger(), "cv_bridge exception %s", e.what());
+            RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
         }
 
         cv::Mat small;
@@ -55,26 +55,38 @@ private:
         RCLCPP_INFO(this->get_logger(), "Small image size is %dx%d", small.cols, small.rows);
 
         // FILL input_data with image
-        uint8_t *input_data = interpreter->typed_input_tensor<uint8_t>(input_tensor_idx);
+        uint8_t *input_data = interpreter->typed_input_tensor<uint8_t>(0);
 
         memcpy(input_data, small.data, input_size * sizeof(uint8_t));
 
         if (interpreter->Invoke() != kTfLiteOk)
-            RCLCPP_ERROR(this->get_logger(), "Something went wrong while invoking the interpreter...");
+            RCLCPP_ERROR(this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
 
-        // GET OUTPUT FROM THIS
-        float *output_data = interpreter->typed_output_tensor<float>(output_tensor_idx);
+        RCLCPP_INFO(this->get_logger(), "Resolving output...");
+        float *output_data = interpreter->typed_output_tensor<float>(0);
 
-        std::vector<std::vector<float>> output = {};
-
-        for (int joint = 0; joint < output_dims->data[2]; joint++)
+        if (interpreter->EnsureTensorDataIsReadable(output_tensor_idx) != kTfLiteOk)
         {
-            std::vector<float> this_out = {};
-            for (int i = 0; i < output_dims->data[3]; i++)
+            RCLCPP_ERROR(this->get_logger(), "ERROR: sensor data not readable");
+        }
+
+        std::vector<std::vector<float>> out(3);
+
+        for (int i = 0; i < output_dims->data[2]; i++)
+        {
+            for (int j = 0; j < output_dims->data[3]; j++)
             {
-                this_out.push_back(output_data[joint * output_dims->data[3] + i]);
+                out[j].push_back(output_data[i * output_dims->data[2] + j]);
             }
         }
+
+        RCLCPP_INFO(this->get_logger(), "Building hpe message...");
+        hpe_msgs::msg::Hpe2d hpe_msg;
+        hpe_msg.joints_x = out[1];
+        hpe_msg.joints_y = out[0];
+        hpe_msg.confidence = out[2];
+        hpe_msg.dim = output_dims->data[2];
+        publisher_->publish(hpe_msg);
     }
 
     void setupTensors()
@@ -183,9 +195,11 @@ private:
 public:
     WorkerNode() : Node("worker")
     {
-        publisher_ = this->create_publisher<std_msgs::msg::String>("topic", 42);
+
+        publisher_ = this->create_publisher<hpe_msgs::msg::Hpe2d>("hpe_result", 42);
         subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-            "/color/image_raw", 42, std::bind(&WorkerNode::callback, this, _1));
+            "/color/image_raw", 1, std::bind(&WorkerNode::callback, this, _1));
+
         setupTensors();
     }
 };
