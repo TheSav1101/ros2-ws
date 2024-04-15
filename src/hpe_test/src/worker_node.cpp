@@ -76,7 +76,7 @@ private:
         {
             for (int j = 0; j < output_dims->data[3]; j++)
             {
-                out[j].push_back(output_data[i * output_dims->data[2] + j]);
+                out[j].push_back(output_data[i * output_dims->data[3] + j]);
             }
         }
 
