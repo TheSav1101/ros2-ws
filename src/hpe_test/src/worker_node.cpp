@@ -13,7 +13,7 @@
 
 using std::placeholders::_1;
 // const std::string model_file = "./models/movenet-singlepose-lightning.tflite";
-const std::string model_file = "./models/4.tflite";
+const std::string model_file = "./models/1.tflite";
 class WorkerNode : public rclcpp::Node
 {
 private:
@@ -117,7 +117,7 @@ private:
         }
 
         RCLCPP_INFO(this->get_logger(), "Setting up dimensions...");
-        interpreter->SetNumThreads(4);
+        //interpreter->SetNumThreads(4);
         input_tensor_idx = interpreter->inputs()[0];
         output_tensor_idx = interpreter->outputs()[0];
 
