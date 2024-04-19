@@ -35,11 +35,17 @@ private:
     TfLiteIntArray *input_dims;
     TfLiteIntArray *output_dims;
 
+    cv_bridge::CvImagePtr cv_ptr;
+    cv::Mat small;
+
+    uint8_t *input_data;
+    float *output_data;
+    hpe_msgs::msg::Hpe2d hpe_msg;
+
     void callback(const sensor_msgs::msg::Image &msg)
     {
         RCLCPP_INFO(this->get_logger(), "Working on a new image");
 
-        cv_bridge::CvImagePtr cv_ptr;
         try
         {
             cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
@@ -50,25 +56,15 @@ private:
             RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
         }
 
-        cv::Mat small;
         cv::resize(cv_ptr->image, small, cv::Size(input_width, input_height), cv::INTER_LINEAR);
         RCLCPP_INFO(this->get_logger(), "Small image size is %dx%d", small.cols, small.rows);
 
         // FILL input_data with image
-        uint8_t *input_data = interpreter->typed_input_tensor<uint8_t>(0);
 
         memcpy(input_data, small.data, input_size * sizeof(uint8_t));
 
         if (interpreter->Invoke() != kTfLiteOk)
             RCLCPP_ERROR(this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
-
-        RCLCPP_INFO(this->get_logger(), "Resolving output...");
-        float *output_data = interpreter->typed_output_tensor<float>(0);
-
-        if (interpreter->EnsureTensorDataIsReadable(output_tensor_idx) != kTfLiteOk)
-        {
-            RCLCPP_ERROR(this->get_logger(), "ERROR: sensor data not readable");
-        }
 
         std::vector<std::vector<float>> out(3);
 
@@ -80,8 +76,6 @@ private:
             }
         }
 
-        RCLCPP_INFO(this->get_logger(), "Building hpe message...");
-        hpe_msgs::msg::Hpe2d hpe_msg;
         hpe_msg.joints_x = out[1];
         hpe_msg.joints_y = out[0];
         hpe_msg.confidence = out[2];
@@ -187,6 +181,9 @@ private:
             if ((i + 1) < num_dims)
                 out_d_st += "x";
         }
+
+        input_data = interpreter->typed_input_tensor<uint8_t>(0);
+        output_data = interpreter->typed_output_tensor<float>(0);
 
         RCLCPP_INFO(this->get_logger(), "Input dimensions are: %s", in_d_st.c_str());
         RCLCPP_INFO(this->get_logger(), "Output dimensions are: %s", out_d_st.c_str());

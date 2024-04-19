@@ -28,6 +28,9 @@ private:
     rclcpp::Subscription<hpe_msgs::msg::Hpe2d>::SharedPtr subscription_hpe;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_image;
     sensor_msgs::msg::Image image;
+    cv_bridge::CvImagePtr cv_ptr;
+    cv_bridge::CvImage cv_image_msg_bridge;
+    cv::Mat image_cv;
 
     void callback2d(hpe_msgs::msg::Hpe2d hpe_result)
     {
@@ -39,18 +42,16 @@ private:
 
         try
         {
-            cv_bridge::CvImagePtr cv_ptr;
 
             cv_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::BGR8);
 
-            cv::Mat image_cv = cv_ptr->image;
+            image_cv = cv_ptr->image;
 
             for (size_t i = 0; i < kp_viz.size(); i++)
             {
                 cv::circle(image_cv, cv::Point(kp_viz[i].x, kp_viz[i].y), 10, cv::Scalar(0, 255, 0));
             }
 
-            cv_bridge::CvImage cv_image_msg_bridge;
             cv_image_msg_bridge = cv_bridge::CvImage(image.header, sensor_msgs::image_encodings::BGR8, image_cv);
             sensor_msgs::msg::Image output;
             cv_image_msg_bridge.toImageMsg(output);
