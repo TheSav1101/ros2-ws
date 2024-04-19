@@ -20,10 +20,10 @@ find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 #message(WARNING "sensor_msgs_INCLUDE_DIRS: ${sensor_msgs_INCLUDE_DIRS}")
 
-find_package(tensorflow_lite REQUIRED)
-list(APPEND libtensorflow_lite_INCLUDE_DIRS "/usr/include/tensorflow")
+find_package(tensorflowlite REQUIRED)
+list(APPEND tensorflowlite_INCLUDE_DIRS "/usr/include/tensorflow")
 #message(WARNING "MANUALLY ADDED INCLUDE DIRECTORIES FOR libtensorflow_lite")
-message(WARNING "libtensorflow_lite_INCLUDE_DIRS: ${tensorflow_lite_INCLUDE_DIRS}")
+message(WARNING "tensorflowlite_INCLUDE_DIRS: ${tensorflowlite_INCLUDE_DIRS}")
 
 find_package(OpenCV REQUIRED)
 #message(WARNING "OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
@@ -39,7 +39,7 @@ find_package(hpe_msgs REQUIRED)
 # Include directories
 include_directories(
   include
-  ${tensorflow_lite_INCLUDE_DIRS}
+  ${tensorflowlite_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${cv_bridge_INCLUDE_DIRS}
   ${std_msgs_INCLUDE_DIRS}
@@ -51,13 +51,10 @@ add_executable(visualizer src/visualizer_node.cpp)
 
 # Link libraries
 message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflow_lite")
-list(APPEND tensorflow_lite_LIBRARIES "/usr/lib/libtensorflowlite.so")
-message(WARNING "tensorflow_lite_LIBRARIES: ${tensorflow_lite_LIBRARIES}")
-message(WARNING "MANUALLY ADDED LIBRARIES FOR cv_bridge")
-list(APPEND tensorflow_lite_LIBRARIES "/opt/ros/humble/lib/libcv_bridge.so")
-message(WARNING "cv_bridge_LIBRARIES: ${cv_bridge_LIBRARIES}")
+list(APPEND tensorflowlite_LIBRARIES "/usr/lib/libtensorflowlite.so")
+message(WARNING "tensorflowlite_LIBRARIES: ${tensorflowlite_LIBRARIES}")
 
-target_link_libraries(worker ${tensorflow_lite_LIBRARIES})
+target_link_libraries(worker ${tensorflowlite_LIBRARIES})
 target_link_libraries(worker ${OpenCV_LIBS})
 target_link_libraries(worker ${cv_bridge_LIBRARIES})
 target_link_libraries(worker ${sensor_msgs_LIBRARIES})
@@ -69,7 +66,7 @@ target_link_libraries(visualizer ${sensor_msgs_LIBRARIES})
 target_link_libraries(visualizer ${std_msgs_LIBRARIES})
 
 
-ament_target_dependencies(worker rclcpp std_msgs sensor_msgs hpe_msgs tensorflow_lite cv_bridge)
+ament_target_dependencies(worker rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge)
 ament_target_dependencies(visualizer rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 install(TARGETS
   worker
