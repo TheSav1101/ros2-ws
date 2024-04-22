@@ -48,6 +48,7 @@ include_directories(
 
 add_executable(worker src/worker_node.cpp)
 add_executable(visualizer src/visualizer_node.cpp)
+add_executable(resizer src/resizer_node.cpp)
 
 # Link libraries
 message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflow_lite")
@@ -65,12 +66,18 @@ target_link_libraries(visualizer ${cv_bridge_LIBRARIES})
 target_link_libraries(visualizer ${sensor_msgs_LIBRARIES})
 target_link_libraries(visualizer ${std_msgs_LIBRARIES})
 
+target_link_libraries(resizer ${OpenCV_LIBS})
+target_link_libraries(resizer ${cv_bridge_LIBRARIES})
+target_link_libraries(resizer ${sensor_msgs_LIBRARIES})
+target_link_libraries(resizer ${std_msgs_LIBRARIES})
 
 ament_target_dependencies(worker rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge)
 ament_target_dependencies(visualizer rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
+ament_target_dependencies(resizer rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 install(TARGETS
   worker
   visualizer
+  resizer
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

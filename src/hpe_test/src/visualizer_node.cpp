@@ -31,6 +31,7 @@ private:
     cv_bridge::CvImagePtr cv_ptr;
     cv_bridge::CvImage cv_image_msg_bridge;
     cv::Mat image_cv;
+    sensor_msgs::msg::Image output;
 
     void callback2d(hpe_msgs::msg::Hpe2d hpe_result)
     {
@@ -53,7 +54,7 @@ private:
             }
 
             cv_image_msg_bridge = cv_bridge::CvImage(image.header, sensor_msgs::image_encodings::BGR8, image_cv);
-            sensor_msgs::msg::Image output;
+
             cv_image_msg_bridge.toImageMsg(output);
             publisher_->publish(output);
         }
@@ -109,23 +110,28 @@ private:
     }
 
 public:
-    visualizerNode() : Node("visualizer")
+    visualizerNode(std::string name, std::string raw_topic, std::string worker_topic) : Node(name)
     {
 
-        publisher_ = this->create_publisher<sensor_msgs::msg::Image>("hpe_visual", 42);
+        publisher_ = this->create_publisher<sensor_msgs::msg::Image>("/hpe_visual/" + name, 10);
 
         subscription_hpe = this->create_subscription<hpe_msgs::msg::Hpe2d>(
-            "/hpe_result", 1, std::bind(&visualizerNode::callback2d, this, _1));
+            worker_topic, 10, std::bind(&visualizerNode::callback2d, this, _1));
 
         subscription_image = this->create_subscription<sensor_msgs::msg::Image>(
-            "/color/image_raw", 1, std::bind(&visualizerNode::image_callback, this, _1));
+            raw_topic, 10, std::bind(&visualizerNode::image_callback, this, _1));
     }
 };
 
 int main(int argc, char *argv[])
 {
+    if (argc != 4)
+    {
+        std::cout << "Usage: ros2 run hpe_test visualizer <name> <raw_image_topic> <worker_topic>\n";
+        return 0;
+    }
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<visualizerNode>());
+    rclcpp::spin(std::make_shared<visualizerNode>(argv[1], argv[2], argv[3]));
     rclcpp::shutdown();
     return 0;
 }

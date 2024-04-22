@@ -13,7 +13,7 @@
 
 using std::placeholders::_1;
 // const std::string model_file = "./models/movenet-singlepose-lightning.tflite";
-const std::string model_file = "./models/4.tflite";
+std::string model_file = "./models/4.tflite";
 class WorkerNode : public rclcpp::Node
 {
 private:
@@ -36,7 +36,6 @@ private:
     TfLiteIntArray *output_dims;
 
     cv_bridge::CvImagePtr cv_ptr;
-    cv::Mat small;
 
     uint8_t *input_data;
     float *output_data;
@@ -46,27 +45,25 @@ private:
     {
         RCLCPP_INFO(this->get_logger(), "Working on a new image");
 
-        try
-        {
-            cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-        }
-        catch (cv_bridge::Exception &e)
-        {
+        // try
+        //{
+        //     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+        // }
+        // catch (cv_bridge::Exception &e)
+        //{
 
-            RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
-        }
-
-        cv::resize(cv_ptr->image, small, cv::Size(input_width, input_height), cv::INTER_LINEAR);
-        RCLCPP_INFO(this->get_logger(), "Small image size is %dx%d", small.cols, small.rows);
+        //    RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
+        //}
 
         // FILL input_data with image
 
-        memcpy(input_data, small.data, input_size * sizeof(uint8_t));
+        // magia del c++, se fa errori guardare qui
+        memcpy(input_data, &msg.data, input_size * sizeof(uint8_t));
 
         if (interpreter->Invoke() != kTfLiteOk)
             RCLCPP_ERROR(this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
 
-        std::vector<std::vector<float>> out(3);
+        std::vector<std::vector<float>> out(output_dims->data[3]);
 
         for (int i = 0; i < output_dims->data[2]; i++)
         {
@@ -190,12 +187,12 @@ private:
     }
 
 public:
-    WorkerNode() : Node("worker")
+    WorkerNode(std::string name, std::string model, std::string topic) : Node(name)
     {
-
-        publisher_ = this->create_publisher<hpe_msgs::msg::Hpe2d>("hpe_result", 42);
+        model_file = model;
+        publisher_ = this->create_publisher<hpe_msgs::msg::Hpe2d>("/hpe_result/" + name, 10);
         subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-            "/color/image_raw", 1, std::bind(&WorkerNode::callback, this, _1));
+            topic, 10, std::bind(&WorkerNode::callback, this, _1));
 
         setupTensors();
     }
@@ -203,8 +200,12 @@ public:
 
 int main(int argc, char *argv[])
 {
+    if (argc != 4)
+    {
+        std::cout << "Usage: ros2 run hpe_test worker <name> <model> <small_image_topic>\n";
+    }
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<WorkerNode>());
+    rclcpp::spin(std::make_shared<WorkerNode>(argv[1], argv[2], argv[3]));
     rclcpp::shutdown();
     return 0;
 }
