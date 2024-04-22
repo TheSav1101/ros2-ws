@@ -45,20 +45,21 @@ private:
     {
         RCLCPP_INFO(this->get_logger(), "Working on a new image");
 
-        // try
-        //{
-        //     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-        // }
-        // catch (cv_bridge::Exception &e)
-        //{
+        try
+        {
+            cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+        }
+        catch (cv_bridge::Exception &e)
+        {
 
-        //    RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
-        //}
+            RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
+        }
 
         // FILL input_data with image
 
         // magia del c++, se fa errori guardare qui
-        memcpy(input_data, &msg.data, input_size * sizeof(uint8_t));
+        // memcpy(input_data, &msg.data, input_size * sizeof(uint8_t));
+        memcpy(input_data, cv_ptr->image.data, input_size * sizeof(uint8_t));
 
         if (interpreter->Invoke() != kTfLiteOk)
             RCLCPP_ERROR(this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
