@@ -22,16 +22,13 @@ find_package(sensor_msgs REQUIRED)
 
 find_package(tensorflowlite REQUIRED)
 list(APPEND tensorflowlite_INCLUDE_DIRS "/usr/include/tensorflow")
-#message(WARNING "MANUALLY ADDED INCLUDE DIRECTORIES FOR libtensorflow_lite")
+#message(WARNING "MANUALLY ADDED INCLUDE DIRECTORIES FOR tensorflowlite")
 message(WARNING "tensorflowlite_INCLUDE_DIRS: ${tensorflowlite_INCLUDE_DIRS}")
 
 find_package(OpenCV REQUIRED)
 #message(WARNING "OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
 
 find_package(cv_bridge REQUIRED)
-list(APPEND cv_bridge_INCLUDE_DIRS "/opt/ros/humble/include/cv_bridge")
-message(WARNING "MANUALLY ADDED INCLUDE DIRECTORIES FOR cv_bridge")
-message(WARNING "cv_bridge_INCLUDE_DIRS: ${cv_bridge_INCLUDE_DIRS}")
 
 find_package(hpe_msgs REQUIRED)
 
@@ -51,7 +48,7 @@ add_executable(visualizer src/visualizer_node.cpp)
 add_executable(resizer src/resizer_node.cpp)
 
 # Link libraries
-message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflow_lite")
+message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflowlite")
 list(APPEND tensorflowlite_LIBRARIES "/usr/lib/libtensorflowlite.so")
 message(WARNING "tensorflowlite_LIBRARIES: ${tensorflowlite_LIBRARIES}")
 

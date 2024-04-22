@@ -108,7 +108,7 @@ private:
         }
 
         RCLCPP_INFO(this->get_logger(), "Setting up dimensions...");
-        interpreter->SetNumThreads(4);
+        // interpreter->SetNumThreads(4);
         input_tensor_idx = interpreter->inputs()[0];
         output_tensor_idx = interpreter->outputs()[0];
 
