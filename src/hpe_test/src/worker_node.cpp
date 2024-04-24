@@ -61,6 +61,17 @@ private:
         // memcpy(input_data, &msg.data, input_size * sizeof(uint8_t));
         memcpy(input_data, cv_ptr->image.data, input_size * sizeof(uint8_t));
 
+        /* DA TESTARE PER TOGLIERE CV_BRIDGE
+        for (int i = 0; i < msg.height; i++)
+        {
+            for (int j = 0; j < msg.width; j++)
+            {
+                input_data[i * msg.width * 3 * sizeof(uint8_t) + j * 3 + 2] = msg.data[i * msg.width * 3 * sizeof(uint8_t) + j * 3];
+                input_data[i * msg.width * 3 * sizeof(uint8_t) + j * 3 + 1] = msg.data[i * msg.width * 3 * sizeof(uint8_t) + j * 3 + 1];
+                input_data[i * msg.width * 3 * sizeof(uint8_t) + j * 3] = msg.data[i * msg.width * 3 * sizeof(uint8_t) + j * 3 + 2];
+            }
+        }
+        */
         if (interpreter->Invoke() != kTfLiteOk)
             RCLCPP_ERROR(this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
 
@@ -188,12 +199,12 @@ private:
     }
 
 public:
-    WorkerNode(std::string name, std::string model, std::string topic) : Node(name)
+    WorkerNode(std::string name, std::string model, std::string resized_image_node_name) : Node(name)
     {
         model_file = model;
         publisher_ = this->create_publisher<hpe_msgs::msg::Hpe2d>("/hpe_result/" + name, 10);
         subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-            topic, 10, std::bind(&WorkerNode::callback, this, _1));
+            "/resized/" + resized_image_node_name, 10, std::bind(&WorkerNode::callback, this, _1));
 
         setupTensors();
     }
@@ -203,7 +214,7 @@ int main(int argc, char *argv[])
 {
     if (argc != 4)
     {
-        std::cout << "Usage: ros2 run hpe_test worker <name> <model> <small_image_topic>\n";
+        std::cout << "Usage: ros2 run hpe_test worker <name> <model_path> <resized_image_node_name>\n";
     }
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<WorkerNode>(argv[1], argv[2], argv[3]));

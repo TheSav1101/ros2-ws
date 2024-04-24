@@ -1,0 +1,15 @@
+package_path: "${PACKAGE_PATH}"
+
+workers:
+    worker1:
+        name: "worker1"
+        args: ["worker1", "${PACKAGE_PATH}/models/1.tflite", "resizer1"]
+resizers:
+    resizer1:
+        name: "resizer1"
+        args: ["resizer1", "camera1", 192, 192]
+
+cameras:
+    camera1:
+        name: "camera1"
+        args: [""]
