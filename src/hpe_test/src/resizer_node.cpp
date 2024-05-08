@@ -22,9 +22,12 @@ private:
     int width = 192;
     int height = 192;
 
+    std::string camera_frame;
+
     cv_bridge::CvImage cv_image_msg_bridge;
     cv_bridge::CvImagePtr cv_ptr;
     cv::Mat small;
+    cv::VideoCapture cap;
 
     sensor_msgs::msg::Image small_msg;
 
@@ -47,15 +50,56 @@ private:
         publisher_->publish(small_msg);
     }
 
+    void open_camera()
+    {
+        cap = cv::VideoCapture(0);
+
+        if (!cap.isOpened())
+        {
+            RCLCPP_ERROR(this->get_logger(), "ERROR: no video feed...");
+        }
+
+        while (1)
+        {
+            cv::Mat frame;
+            cap >> frame;
+
+            if (frame.empty())
+            {
+                RCLCPP_ERROR(this->get_logger(), "ERROR: missin a frame...");
+            }
+            cv::resize(cv_ptr->image, small, cv::Size(width, height), cv::INTER_LINEAR);
+
+            std_msgs::msg::Header header;
+            header.set__stamp(this->get_clock()->now());
+            header.set__frame_id(camera_frame);
+            cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, small);
+            cv_image_msg_bridge.toImageMsg(small_msg);
+            publisher_->publish(small_msg);
+
+            if (cv::waitKey(1) == 'q')
+            {
+                break;
+            }
+        }
+
+        cap.release();
+    }
+
 public:
     ResizerNode(std::string name, std::string raw_topic, int h, int w) : Node(name)
     {
         width = w;
         height = h;
         publisher_ = this->create_publisher<sensor_msgs::msg::Image>("/resized/" + name, 10);
-        subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-            raw_topic, 10, std::bind(&ResizerNode::callback, this, _1));
-
+        camera_frame = name;
+        if (raw_topic != "null")
+            subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
+                raw_topic, 10, std::bind(&ResizerNode::callback, this, _1));
+        else
+        {
+            open_camera();
+        }
         RCLCPP_INFO(this->get_logger(), "Ready");
     }
 };

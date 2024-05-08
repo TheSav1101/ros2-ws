@@ -12,7 +12,8 @@
                 "${workspaceFolder}/install/hpe_test/share",
                 "${workspaceFolder}/install/hpe_msgs/include/hpe_msgs",
                 "/opt/ros/humble/include/rclcpp",
-                "/opt/ros/humble/include/cv_bridge"
+                "/opt/ros/humble/include/cv_bridge",
+                "/opt/ros/humble/include/rcl"
             ],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "${default}",
