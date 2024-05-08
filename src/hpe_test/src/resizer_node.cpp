@@ -54,11 +54,13 @@ private:
     {
         cap = cv::VideoCapture(0);
 
+        RCLCPP_INFO(this->get_logger(), "Ready");
         if (!cap.isOpened())
         {
             RCLCPP_ERROR(this->get_logger(), "ERROR: no video feed...");
         }
 
+        RCLCPP_INFO(this->get_logger(), "Starting loop");
         while (1)
         {
             cv::Mat frame;
@@ -77,6 +79,7 @@ private:
             cv_image_msg_bridge.toImageMsg(small_msg);
             publisher_->publish(small_msg);
 
+            RCLCPP_INFO(this->get_logger(), "One loop");
             if (cv::waitKey(1) == 'q')
             {
                 break;
@@ -94,13 +97,15 @@ public:
         publisher_ = this->create_publisher<sensor_msgs::msg::Image>("/resized/" + name, 10);
         camera_frame = name;
         if (raw_topic != "null")
+        {
             subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
                 raw_topic, 10, std::bind(&ResizerNode::callback, this, _1));
+            RCLCPP_INFO(this->get_logger(), "Ready");
+        }
         else
         {
             open_camera();
         }
-        RCLCPP_INFO(this->get_logger(), "Ready");
     }
 };
 
