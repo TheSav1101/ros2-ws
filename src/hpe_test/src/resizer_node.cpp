@@ -70,7 +70,7 @@ private:
             {
                 RCLCPP_ERROR(this->get_logger(), "ERROR: missin a frame...");
             }
-            cv::resize(cv_ptr->image, small, cv::Size(width, height), cv::INTER_LINEAR);
+            cv::resize(frame, small, cv::Size(width, height), cv::INTER_LINEAR);
 
             std_msgs::msg::Header header;
             header.set__stamp(this->get_clock()->now());

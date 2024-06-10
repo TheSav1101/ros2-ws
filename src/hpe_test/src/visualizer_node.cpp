@@ -50,7 +50,7 @@ private:
 
             for (size_t i = 0; i < kp_viz.size(); i++)
             {
-                cv::circle(image_cv, cv::Point(kp_viz[i].x, kp_viz[i].y), 10, cv::Scalar(0, 255, 0));
+                cv::circle(image_cv, cv::Point(kp_viz[i].x, kp_viz[i].y), 2, cv::Scalar(0, 255, 0));
             }
 
             cv_image_msg_bridge = cv_bridge::CvImage(image.header, sensor_msgs::image_encodings::BGR8, image_cv);
@@ -87,7 +87,7 @@ private:
         const std::vector<Keypoint_score> &keypoints_with_scores,
         int height,
         int width,
-        float keypoint_threshold = 0.1)
+        float keypoint_threshold = 0.5)
     {
 
         std::vector<Keypoint> keypoints_all;
