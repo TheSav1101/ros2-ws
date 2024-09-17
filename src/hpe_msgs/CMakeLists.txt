@@ -17,6 +17,7 @@ find_package(sensor_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Hpe3d.msg"
   "msg/Hpe2d.msg"
+  "msg/Detections.msg"
   DEPENDENCIES builtin_interfaces std_msgs sensor_msgs # Add packages that above messages depend on, in this case geometry_msgs for Sphere.msg
 )
 

@@ -3,7 +3,7 @@
 #include <opencv4/opencv2/opencv.hpp>
 #include "hpe_msgs/msg/hpe2d.hpp"
 #include <deque>
-#include <cv_bridge/cv_bridge.h>
+#include <cv_bridge/cv_bridge.hpp>
 #include <std_msgs/msg/header.hpp>
 
 using std::placeholders::_1;
@@ -110,7 +110,7 @@ private:
     }
 
 public:
-    visualizerNode(std::string name, std::string raw_topic, std::string worker_topic) : Node(name)
+    visualizerNode(std::string name, std::string raw_topic, std::string worker_topic) : Node("visualizer_" + name)
     {
 
         publisher_ = this->create_publisher<sensor_msgs::msg::Image>("/hpe_visual/" + name, 10);
