@@ -9,10 +9,8 @@
 #include <tensorflow/lite/interpreter.h>
 #include <tensorflow/lite/kernels/register.h>
 #include <tensorflow/lite/model.h>
-#include "hpe_msgs/msg/hpe2d.hpp"
-#include "hpe_msgs/msg/detection.hpp"
-#include "hpe_msgs/msg/box.hpp"
-#include "hpe_test/data.inl"
+#include "hpe_msgs/srv/estimate.hpp"
+#include "hpe_test/data.hpp"
 
 
 namespace hpe_test {
@@ -24,12 +22,11 @@ namespace hpe_test {
 
         private:
             void setupTensors();
-            void callback(const hpe_msgs::msg::Detection &msg);
+            void service(const std::shared_ptr<hpe_msgs::srv::Estimate::Request> request, std::shared_ptr<hpe_msgs::srv::Estimate::Response> response);
 
             int hpe_model_n = 0;
 
-            rclcpp::Publisher<hpe_msgs::msg::Hpe2d>::SharedPtr publisher_;
-            rclcpp::Subscription<hpe_msgs::msg::Detection>::SharedPtr subscription_;
+            rclcpp::Service<hpe_msgs::srv::Estimate>::SharedPtr service_;
             
             std::unique_ptr<tflite::FlatBufferModel> model;
             std::unique_ptr<tflite::Interpreter> interpreter;

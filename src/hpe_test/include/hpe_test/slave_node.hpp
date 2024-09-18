@@ -1,5 +1,5 @@
-#ifndef HPE_TEST__RESIZER_NODE_HPP_
-#define HPE_TEST__RESIZER_NODE_HPP_
+#ifndef HPE_TEST__SLAVE_NODE_HPP_
+#define HPE_TEST__SLAVE_NODE_HPP_
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -12,17 +12,18 @@
 #include <vector>
 #include "hpe_msgs/msg/hpe2d.hpp"
 #include "hpe_msgs/msg/detection.hpp"
+#include "hpe_msgs/msg/slave.hpp"
 #include "hpe_msgs/msg/box.hpp"
 #include "hpe_test/worker_node.hpp"
-#include "hpe_test/data.inl"
+#include "hpe_test/data.hpp"
 
 
 namespace hpe_test {
 
-	class ResizerNode : public rclcpp::Node {
+	class SlaveNode : public rclcpp::Node {
 		public:
-			ResizerNode(std::string name, std::string raw_topic, int model_, int detection_model_, int starting_workers);
-			~ResizerNode();
+			SlaveNode(std::string name, std::string raw_topic, int model_, int detection_model_, int starting_workers);
+			~SlaveNode();
 
 		private:
 			float computeIoU(const float* box1, const float* box2);
@@ -39,7 +40,8 @@ namespace hpe_test {
 
 			//publishers
 			rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_boxes_;
-			std::vector<rclcpp::Publisher<hpe_msgs::msg::Detection>::SharedPtr> publishers_;
+			rclcpp::Publisher<hpe_msgs::msg::Slave>::SharedPtr publisher_slave_;
+			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedPtr> clients_;
 			
 			//subscriber
 			rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;

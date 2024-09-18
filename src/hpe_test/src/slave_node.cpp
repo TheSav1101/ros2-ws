@@ -1,10 +1,12 @@
-#include <hpe_test/resizer_node.hpp>
+#include <hpe_test/slave_node.hpp>
 
 using std::placeholders::_1;
+using std::placeholders::_2;
+
 
 namespace hpe_test {
 
-	float ResizerNode::computeIoU(const float* box1, const float* box2) {
+	float SlaveNode::computeIoU(const float* box1, const float* box2) {
 		float x1 = std::max(box1[0] - box1[2]/2.0, box2[0] - box2[2]/2.0);
 		float y1 = std::max(box1[1] - box1[3]/2.0, box2[1] - box2[3]/2.0);
 		float x2 = std::min(box1[0] + box1[2]/2.0, box2[0] + box2[2]/2.0);
@@ -17,7 +19,7 @@ namespace hpe_test {
 		return intersectionArea / (box1Area + box2Area - intersectionArea);
 	}
 
-	std::vector<size_t> ResizerNode::nonMaxSuppression(float* boxes, float* scores, size_t numBoxes, float iouThreshold, float minConfidence) {
+	std::vector<size_t> SlaveNode::nonMaxSuppression(float* boxes, float* scores, size_t numBoxes, float iouThreshold, float minConfidence) {
 		std::vector<size_t> indices(numBoxes);
 		std::vector<size_t> final_indices;
 
@@ -49,26 +51,21 @@ namespace hpe_test {
 		return final_indices;
 	}
 
-	void ResizerNode::create_new_worker(){
+	void SlaveNode::create_new_worker(){
 
 		std::string name = node_name + "_" + std::to_string(workers_n);
-		publishers_.push_back(this->create_publisher<hpe_msgs::msg::Detection>("/box/" + name, 10));
-		
-		if (publishers_[workers_n] == nullptr) {
-			RCLCPP_ERROR(this->get_logger(), "Publisher is not initialized");
-			return;
-		}
+		workers_n++;
 
+		clients_.push_back(this->create_client<hpe_msgs::srv::Estimate>("estimate" + name));
+		
 		worker_threads.push_back(std::thread([name, this]() {
 			auto worker_node = std::make_shared<hpe_test::WorkerNode>(name, hpe_model_n);
 			rclcpp::spin(worker_node);
 			rclcpp::shutdown();
 		}));
-		
-		workers_n++;
 	}
 
-  	void ResizerNode::findPpl(cv::Mat &img, std_msgs::msg::Header header) {
+  	void SlaveNode::findPpl(cv::Mat &img, std_msgs::msg::Header header) {
 
 		cv::resize(img, small, cv::Size(DETECTION_MODEL_WIDTH[detection_model_n], DETECTION_MODEL_HEIGHT[detection_model_n]), cv::INTER_LINEAR);
 
@@ -108,8 +105,9 @@ namespace hpe_test {
 		float scaleX = (float) img.cols / (float) DETECTION_MODEL_WIDTH[detection_model_n];
 		float scaleY = (float) img.rows / (float) DETECTION_MODEL_HEIGHT[detection_model_n];
 
-		size_t publishers_index = 0;
-		
+		size_t clients_index = 0;
+		std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> futures = {};
+
 		for(size_t i: filtered_indices){
 
 			float x1 = boxes[4 * i]     - boxes[4 * i + 2]/2.0;
@@ -137,32 +135,62 @@ namespace hpe_test {
 
 			auto det_msg = hpe_msgs::msg::Detection();
 			auto box_msg = hpe_msgs::msg::Box();
+			auto request = std::make_shared<hpe_msgs::srv::Estimate::Request>();
 
-			box_msg.x 		= box.x;
-			box_msg.y 		= box.y;
-			box_msg.width 	= box.width;
-			box_msg.height 	= box.height;
+			box_msg.x 			= box.x;
+			box_msg.y 			= box.y;
+			box_msg.width 		= box.width;
+			box_msg.height 		= box.height;
+			box_msg.img_width 	= img.cols;
+			box_msg.img_height 	= img.rows;
 
-			det_msg.image 	= small_msg;
-			det_msg.box 	= box_msg;
+			det_msg.image 		= small_msg;
+			det_msg.box 		= box_msg;
+
+			request->detection 	= det_msg;
 
 
-			if (publishers_[publishers_index] == nullptr) {
+			if (clients_[clients_index] == nullptr) {
 				RCLCPP_ERROR(this->get_logger(), "Publisher is not initialized for index %ld, i will allocate a new one...", i);
+				create_new_worker();
 			}else{
-				publishers_[publishers_index]->publish(det_msg);	
+				futures.push_back(clients_[clients_index]->async_send_request(request).share());
 			}
 
-			publishers_index++;
+			clients_index++;
 
 		}
 
 		cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, boxes_img);
-		cv_image_msg_bridge.toImageMsg(small_msg);		
+		cv_image_msg_bridge.toImageMsg(small_msg);
 		publisher_boxes_->publish(small_msg);
+
+		std::vector<hpe_msgs::msg::Joints2d> all_joints = {};
+
+        for (size_t i = 0; i < futures.size(); ++i)
+        {
+            auto result = rclcpp::spin_until_future_complete(this->get_node_base_interface(), futures[i]);
+            if (result == rclcpp::FutureReturnCode::SUCCESS)
+            {
+                auto response = futures[i].get();
+                RCLCPP_INFO(this->get_logger(), "Received response from worker %zu", i);
+				all_joints.push_back(response->hpe2d.joints);
+
+            }
+            else
+            {
+                RCLCPP_ERROR(this->get_logger(), "Failed to get response from worker %zu", i);
+            }
+        }
+
+		hpe_msgs::msg::Slave slave_msg = hpe_msgs::msg::Slave();
+		slave_msg.header = header;
+		slave_msg.all_joints = all_joints;
+
+		publisher_slave_->publish(slave_msg);
 	}
 
-	void ResizerNode::setupTensors() {
+	void SlaveNode::setupTensors() {
 		RCLCPP_INFO(this->get_logger(), "Building FlatBufferModel...");
 		model = tflite::FlatBufferModel::BuildFromFile(DETECTION_MODEL_FILES[detection_model_n].c_str());
 		if (!model) {
@@ -217,7 +245,7 @@ namespace hpe_test {
 		input_data = interpreter->typed_input_tensor<float>(0);
 	}
 
-	void ResizerNode::callback(const sensor_msgs::msg::Image &msg) {
+	void SlaveNode::callback(const sensor_msgs::msg::Image &msg) {
 		try {
 			cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
 		} catch (cv_bridge::Exception &e) {
@@ -228,7 +256,7 @@ namespace hpe_test {
 		findPpl(cv_ptr->image, msg.header);
 	}
 
-  	void ResizerNode::open_camera() {
+  	void SlaveNode::open_camera() {
 		cap = cv::VideoCapture(0);
 
 		RCLCPP_INFO(this->get_logger(), "Ready");
@@ -255,37 +283,39 @@ namespace hpe_test {
 		cap.release();
 	}
 
-	ResizerNode::ResizerNode(std::string name, std::string raw_topic, int hpe_model_n_, int detection_model_n_, int starting_workers) : Node("resizer_" + name) {
+	SlaveNode::SlaveNode(std::string name, std::string raw_topic, int hpe_model_n_, int detection_model_n_, int starting_workers) : Node("resizer_" + name) {
 		node_name = name;
 
 		hpe_model_n = hpe_model_n_;
 		detection_model_n = detection_model_n_;
 
-		if(hpe_model_n < 0 || hpe_model_n > MODEL_FILES.size()){
-			RCLCPP_ERROR(this->get_logger(), "NOT A GOOD HPE MODEL NUMBER. MUST BE BETWEEN 0 AND %d", MODEL_FILES.size() - 1);
+		if(hpe_model_n < 0 || (size_t) hpe_model_n > MODEL_FILES.size()){
+			RCLCPP_ERROR(this->get_logger(), "NOT A GOOD HPE MODEL NUMBER. MUST BE BETWEEN 0 AND %ld", MODEL_FILES.size() - 1);
 		}
 
-		if(detection_model_n < 0 || detection_model_n > DETECTION_MODEL_FILES.size()){
-			RCLCPP_ERROR(this->get_logger(), "NOT A GOOD DETECTION MODEL NUMBER. MUST BE BETWEEN 0 AND %d", DETECTION_MODEL_FILES.size() - 1);
+		if(detection_model_n < 0 || (size_t) detection_model_n > DETECTION_MODEL_FILES.size()){
+			RCLCPP_ERROR(this->get_logger(), "NOT A GOOD DETECTION MODEL NUMBER. MUST BE BETWEEN 0 AND %ld", DETECTION_MODEL_FILES.size() - 1);
 		}
 
-		publishers_ = {};
-		publisher_boxes_ = this->create_publisher<sensor_msgs::msg::Image>("/boxes/" + name, 10);
+		clients_ = {};
+		publisher_boxes_ = this->create_publisher<sensor_msgs::msg::Image>("/boxes_" + name, 10);
+		publisher_slave_ = this->create_publisher<hpe_msgs::msg::Slave>("/slave_" + name, 10);
+
 		for(int i = 0; i < starting_workers; i++){
 			create_new_worker();
 		}
 
 		setupTensors();
 		if (raw_topic != "null") {
-			subscription_ = this->create_subscription<sensor_msgs::msg::Image>(raw_topic, 10, std::bind(&ResizerNode::callback, this, _1));
+			subscription_ = this->create_subscription<sensor_msgs::msg::Image>(raw_topic, 10, std::bind(&SlaveNode::callback, this, _1));
 			RCLCPP_INFO(this->get_logger(), "Ready");
 		} else {
 			RCLCPP_INFO(this->get_logger(), "Realsense camera not found, using webcam...");
-		open_camera();
+			open_camera();
 		}
   	}
 
-	ResizerNode::~ResizerNode(){
+	SlaveNode::~SlaveNode(){
 		for (auto& t : worker_threads) {
 			if (t.joinable()) {
 				t.join();

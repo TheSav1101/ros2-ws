@@ -1,14 +1,16 @@
 #include "hpe_test/worker_node.hpp"
 
 using std::placeholders::_1;
+using std::placeholders::_2;
+
 
 namespace hpe_test{
 		
-	void WorkerNode::callback(const hpe_msgs::msg::Detection &msg) {
+	void WorkerNode::service(const std::shared_ptr<hpe_msgs::srv::Estimate::Request> request, std::shared_ptr<hpe_msgs::srv::Estimate::Response> response) {
 		//RCLCPP_INFO(this->get_logger(), "Working on a new image");
 
 		try {
-			cv_ptr = cv_bridge::toCvCopy(msg.image, sensor_msgs::image_encodings::BGR8);
+			cv_ptr = cv_bridge::toCvCopy(request->detection.image, sensor_msgs::image_encodings::BGR8);
 		} catch (cv_bridge::Exception &e) {
 
 			RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s",
@@ -30,13 +32,21 @@ namespace hpe_test{
 			}
 		}
 
-		hpe_msg.header = msg.image.header;
-		hpe_msg.joints_x = out[1];
-		hpe_msg.joints_y = out[0];
-		hpe_msg.confidence = out[2];
-		hpe_msg.dim = output_dims->data[2];
-		hpe_msg.box = msg.box;
-		publisher_->publish(hpe_msg);
+		//UNTESTED, se ci sono errori guardate qui...
+		float scaleY = request->detection.box.height / request->detection.box.img_height;
+		float scaleX = request->detection.box.width  / request->detection.box.img_width;
+
+		//Deal with warping...
+		for(size_t i = 0; i < out[0].size(); i++){
+			out[0][i] = out[0][i]*scaleY + request->detection.box.y;
+			out[1][i] = out[1][i]*scaleX + request->detection.box.x;
+		}
+
+		response->hpe2d.header = request->detection.image.header;
+		response->hpe2d.joints.y = out[0];
+		response->hpe2d.joints.x = out[1];
+		response->hpe2d.joints.confidence = out[2];
+		response->hpe2d.joints.dim = output_dims->data[2];
 	}
 
 	void WorkerNode::setupTensors() {
@@ -98,8 +108,7 @@ namespace hpe_test{
 	WorkerNode::WorkerNode(std::string name, int model_): Node("worker_" + name) {
 		hpe_model_n = model_;
 		setupTensors();
-		publisher_ = this->create_publisher<hpe_msgs::msg::Hpe2d>("/hpe_result/" + name, 10);
-		subscription_ = this->create_subscription<hpe_msgs::msg::Detection>("/box/" + name, 10, std::bind(&WorkerNode::callback, this, _1));
+		service_ = this->create_service<hpe_msgs::srv::Estimate>("estimate" + name, std::bind(&WorkerNode::service, this, _1, _2));
 	}
 
 	WorkerNode::~WorkerNode(){

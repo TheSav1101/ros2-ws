@@ -20,11 +20,18 @@ set(msg_files
   "msg/Box.msg"
   "msg/Hpe2d.msg"
   "msg/Detection.msg"
+  "msg/Joints2d.msg"
+  "msg/Slave.msg"
+)
+
+set(srv_files
+  "srv/Estimate.srv"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${msg_files}
-  DEPENDENCIES builtin_interfaces std_msgs sensor_msgs # Add packages that above messages depend on, in this case geometry_msgs for Sphere.msg
+  ${srv_files}
+  DEPENDENCIES  builtin_interfaces std_msgs sensor_msgs # Add packages that above messages depend on, in this case geometry_msgs for Sphere.msg
 )
 
 if(BUILD_TESTING)
