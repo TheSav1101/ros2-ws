@@ -85,20 +85,12 @@ namespace hpe_test {
 			return;
 		}
 
-		float* boxes;
-		float* confidence;
+		float* boxes = interpreter->typed_output_tensor<float>(0);
+		float* confidence = interpreter->typed_output_tensor<float>(1);
 
-
-		for (size_t i = 0; i < interpreter->outputs().size(); i++) {
-				
-			output_data = interpreter->typed_output_tensor<float>(i);
-			if(i == 0)
-				boxes = output_data;
-			else
-				confidence = output_data;
-		}
 	
-		std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.75, 0.75);
+		std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.75, 0.4);
+		RCLCPP_INFO(this->get_logger(), "Found %ld people", filtered_indices.size());
 
 		cv::Mat boxes_img = img.clone();
 
@@ -114,8 +106,6 @@ namespace hpe_test {
 			float y1 = boxes[4 * i + 1] - boxes[4 * i + 3]/2.0;
 			float x2 = boxes[4 * i]     + boxes[4 * i + 2]/2.0;
 			float y2 = boxes[4 * i + 1] + boxes[4 * i + 3]/2.0;
-
-			RCLCPP_INFO(this->get_logger(), "x1: %f, y1: %f, x2: %f, y2, %f, ScaleX: %f, scaleY: %f", x1, y1, x2, y2, scaleX, scaleY);
 
 			cv::rectangle(boxes_img, cv::Point(static_cast<int>(x1 * scaleX), static_cast<int>(y1 * scaleY)), 
 				cv::Point(static_cast<int>(x2 * scaleX), static_cast<int>(y2 * scaleY)),
@@ -150,11 +140,15 @@ namespace hpe_test {
 			request->detection 	= det_msg;
 
 
-			if (clients_[clients_index] == nullptr) {
-				RCLCPP_ERROR(this->get_logger(), "Publisher is not initialized for index %ld, i will allocate a new one...", i);
-				create_new_worker();
+			if (clients_index >= clients_.size()) {
+				RCLCPP_WARN(this->get_logger(), "worker_%s_%ld was not created yet, i will create a new one...", node_name.c_str(), clients_index);
+    			(void)std::async(std::launch::async, &SlaveNode::create_new_worker, this);
 			}else{
-				futures.push_back(clients_[clients_index]->async_send_request(request).share());
+				if(clients_[clients_index]->wait_for_service(std::chrono::seconds(0))){
+					futures.push_back(clients_[clients_index]->async_send_request(request).share());
+				}else{
+					RCLCPP_WARN(this->get_logger(), "worker_%s_%ld, is not ready yet...", node_name.c_str(), clients_index);
+				}
 			}
 
 			clients_index++;
@@ -173,19 +167,20 @@ namespace hpe_test {
             if (result == rclcpp::FutureReturnCode::SUCCESS)
             {
                 auto response = futures[i].get();
-                RCLCPP_INFO(this->get_logger(), "Received response from worker %zu", i);
+                RCLCPP_INFO(this->get_logger(), "Received response from worker_%s_%zu", node_name.c_str(), i);
 				all_joints.push_back(response->hpe2d.joints);
 
             }
             else
             {
-                RCLCPP_ERROR(this->get_logger(), "Failed to get response from worker %zu", i);
+                RCLCPP_ERROR(this->get_logger(), "Failed to get response from worker_%s_%zu", node_name.c_str(), i);
             }
         }
 
 		hpe_msgs::msg::Slave slave_msg = hpe_msgs::msg::Slave();
 		slave_msg.header = header;
 		slave_msg.all_joints = all_joints;
+		slave_msg.skeletons_n = all_joints.size();
 
 		publisher_slave_->publish(slave_msg);
 	}
@@ -215,12 +210,15 @@ namespace hpe_test {
 			RCLCPP_ERROR(this->get_logger(), "ERROR ALLOCATING TENSORS!");
 		}
 
+		input_size = 1;
+
 		int num_inputs = interpreter->inputs().size();
     	for (int i = 0; i < num_inputs; ++i) {
         	const TfLiteTensor* input_tensor = interpreter->tensor(interpreter->inputs()[i]);
         	RCLCPP_INFO(this->get_logger(), "Input Tensor %d: Type=%d", i, input_tensor->type);
         	RCLCPP_INFO(this->get_logger(), "Input Tensor %d Dimensions: ", i);
 			for (int j = 0; j < input_tensor->dims->size; ++j) {
+				input_size *= input_tensor->dims->data[j];
 				RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j, input_tensor->dims->data[j]);
 			}
 		}
@@ -283,7 +281,7 @@ namespace hpe_test {
 		cap.release();
 	}
 
-	SlaveNode::SlaveNode(std::string name, std::string raw_topic, int hpe_model_n_, int detection_model_n_, int starting_workers) : Node("resizer_" + name) {
+	SlaveNode::SlaveNode(std::string name, std::string raw_topic, int hpe_model_n_, int detection_model_n_, int starting_workers) : Node(name) {
 		node_name = name;
 
 		hpe_model_n = hpe_model_n_;
@@ -305,6 +303,8 @@ namespace hpe_test {
 			create_new_worker();
 		}
 
+		calibration_service_ = this->create_service<hpe_msgs::srv::Calibration>("/calibration_" + name, std::bind(&SlaveNode::calibrationService, this, _1, _2));
+
 		setupTensors();
 		if (raw_topic != "null") {
 			subscription_ = this->create_subscription<sensor_msgs::msg::Image>(raw_topic, 10, std::bind(&SlaveNode::callback, this, _1));
@@ -322,4 +322,9 @@ namespace hpe_test {
 			}
 		}
 	}
+
+	void SlaveNode::calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request, std::shared_ptr<hpe_msgs::srv::Calibration::Response> response){
+		RCLCPP_ERROR(this->get_logger(), "Failed to call calibration service for node %s.", node_name.c_str());
+	}
+
 };

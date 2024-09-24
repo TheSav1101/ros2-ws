@@ -5,7 +5,7 @@ int main(int argc, char *argv[]) {
 		std::cout << "Usage: ros2 run hpe_test slave <name> <raw_topic> <model> <detection_model> <optional: starting_workers>\n";
 		return 1;
 	}
-	int starting_workers = 2;
+	int starting_workers = 1;
 	if(argc == 6){
 		starting_workers = atoi(argv[4]);
 	}else if(argc > 6){

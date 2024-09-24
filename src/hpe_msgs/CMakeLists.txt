@@ -22,10 +22,15 @@ set(msg_files
   "msg/Detection.msg"
   "msg/Joints2d.msg"
   "msg/Slave.msg"
+  "msg/Joints3d.msg"
+  "msg/Master.msg"
+  "msg/IntrinsicParams.msg"
+  "msg/Calibration.msg"
 )
 
 set(srv_files
   "srv/Estimate.srv"
+  "srv/Calibration.srv"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

@@ -109,6 +109,7 @@ namespace hpe_test{
 		hpe_model_n = model_;
 		setupTensors();
 		service_ = this->create_service<hpe_msgs::srv::Estimate>("estimate" + name, std::bind(&WorkerNode::service, this, _1, _2));
+		RCLCPP_INFO(this->get_logger(), "worker_%s is ready", name.c_str());
 	}
 
 	WorkerNode::~WorkerNode(){

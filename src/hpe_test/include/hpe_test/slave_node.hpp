@@ -16,6 +16,7 @@
 #include "hpe_msgs/msg/box.hpp"
 #include "hpe_test/worker_node.hpp"
 #include "hpe_test/data.hpp"
+#include "hpe_msgs/srv/calibration.hpp"
 
 
 namespace hpe_test {
@@ -33,6 +34,7 @@ namespace hpe_test {
 			void callback(const sensor_msgs::msg::Image &msg);
 			void open_camera();
 			void findPpl(cv::Mat&, std_msgs::msg::Header);
+			void calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request, std::shared_ptr<hpe_msgs::srv::Calibration::Response> response);
 
 			//model numbers (see data.inl)
 			int detection_model_n = 0; 
@@ -42,6 +44,7 @@ namespace hpe_test {
 			rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_boxes_;
 			rclcpp::Publisher<hpe_msgs::msg::Slave>::SharedPtr publisher_slave_;
 			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedPtr> clients_;
+			rclcpp::Service<hpe_msgs::srv::Calibration>::SharedPtr calibration_service_;
 			
 			//subscriber
 			rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;

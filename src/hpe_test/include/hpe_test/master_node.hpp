@@ -7,29 +7,36 @@
 #include <opencv4/opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.hpp>
 #include <vector>
-#include "hpe_msgs/msg/detection.hpp"
-#include "hpe_msgs/msg/box.hpp"
+#include <regex>
 #include "hpe_msgs/msg/slave.hpp"
-#include "hpe_test/slave_node.hpp"
-#include "hpe_test/data.hpp"
+#include "hpe_msgs/srv/calibration.hpp"
 
 
 namespace hpe_test {
 
 	class MasterNode : public rclcpp::Node {
 		public:
-			MasterNode(std::string name, int slave_n_);
+			MasterNode(std::string name);
 			~MasterNode();
 
 		private:
 			//salva out di ogni raspberry
-			void callback(const hpe_msgs::msg::Slave &msg);
+			void callback(const hpe_msgs::msg::Slave &msg, int index, std::string topic);
 			void loop();
+			void scan_for_slaves();
+			void requestCalibration(std::string &service_name);
+			filterFeedbacks(std::vector<hpe_msgs::msg::Slave> &filtered_feedbacks, std::vector<int> &camera_indices);
 
-			std::vector<rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr> subscribers_ = {};
+			const float MAX_TIME_DIFF = 0.5;
+			std::vector<rclcpp::Subscription<hpe_msgs::msg::Slave>::SharedPtr> subscribers_ = {};
+			std::set<std::string> subscribed_topics_names_;
 
-			int slave_n = 0;
-			std::vector<hpe_msgs::msg::Slave> slaves_feedback;
+			std::vector<hpe_msgs::msg::Slave> slaves_feedback_;
+
+			std::vector<hpe_msgs::msg::Calibration> slaves_calibration_;
+
+		    rclcpp::TimerBase::SharedPtr scanner_;
+
 		};
 }
 #endif
