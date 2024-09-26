@@ -25,7 +25,7 @@ namespace hpe_test {
 			void loop();
 			void scan_for_slaves();
 			void requestCalibration(std::string &service_name);
-			filterFeedbacks(std::vector<hpe_msgs::msg::Slave> &filtered_feedbacks, std::vector<int> &camera_indices);
+			void filterFeedbacks(std::vector<hpe_msgs::msg::Slave> &filtered_feedbacks, std::vector<int> &camera_indices);
 
 			const float MAX_TIME_DIFF = 0.5;
 			std::vector<rclcpp::Subscription<hpe_msgs::msg::Slave>::SharedPtr> subscribers_ = {};

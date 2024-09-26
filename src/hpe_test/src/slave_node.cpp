@@ -7,17 +7,30 @@ using std::placeholders::_2;
 namespace hpe_test {
 
 	float SlaveNode::computeIoU(const float* box1, const float* box2) {
-		float x1 = std::max(box1[0] - box1[2]/2.0, box2[0] - box2[2]/2.0);
-		float y1 = std::max(box1[1] - box1[3]/2.0, box2[1] - box2[3]/2.0);
-		float x2 = std::min(box1[0] + box1[2]/2.0, box2[0] + box2[2]/2.0);
-		float y2 = std::min(box1[1] + box1[3]/2.0, box2[1] + box2[3]/2.0);
+    float half_w1 = box1[2] / 2.0;
+    float half_h1 = box1[3] / 2.0;
+    float half_w2 = box2[2] / 2.0;
+    float half_h2 = box2[3] / 2.0;
 
-		float intersectionArea = std::max(0.0f, x2 - x1) * std::max(0.0f, y2 - y1);
-		float box1Area = box1[2] * box1[3];
-		float box2Area = box2[2] * box2[3];
+    float x1 = std::max(box1[0] - half_w1, box2[0] - half_w2);
+    float y1 = std::max(box1[1] - half_h1, box2[1] - half_h2);
+    float x2 = std::min(box1[0] + half_w1, box2[0] + half_w2);
+    float y2 = std::min(box1[1] + half_h1, box2[1] + half_h2);
 
-		return intersectionArea / (box1Area + box2Area - intersectionArea);
-	}
+    float intersectionWidth = std::max(0.0f, x2 - x1);
+    float intersectionHeight = std::max(0.0f, y2 - y1);
+    float intersectionArea = intersectionWidth * intersectionHeight;
+
+    float box1Area = box1[2] * box1[3];
+    float box2Area = box2[2] * box2[3];
+
+    float unionArea = box1Area + box2Area - intersectionArea;
+    if (unionArea <= 0.0) {
+        return 0.0;
+    }
+
+    return intersectionArea / unionArea;
+}
 
 	std::vector<size_t> SlaveNode::nonMaxSuppression(float* boxes, float* scores, size_t numBoxes, float iouThreshold, float minConfidence) {
 		std::vector<size_t> indices(numBoxes);
@@ -25,7 +38,6 @@ namespace hpe_test {
 
 		std::iota(indices.begin(), indices.end(), 0);
 
-		// Sort indices by score in descending order
 		std::sort(indices.begin(), indices.end(), [&](size_t i1, size_t i2) {
 			return scores[i1] > scores[i2];
 		});
@@ -36,10 +48,6 @@ namespace hpe_test {
 			size_t idx = indices[i];
 			if (scores[idx] < minConfidence || suppressed[idx]) continue;
 			final_indices.push_back(idx);
-
-			//std::string out ="Box: (" + std::to_string(boxes[4 * idx]) + ", " + std::to_string(boxes[4 * idx + 1]) + ", " + std::to_string(boxes[4 * idx + 2]) + ", " +std::to_string(boxes[4 * idx + 3]) + ") with score " + std::to_string(scores[idx]);
-			//RCLCPP_INFO(this->get_logger(), "%s", out.c_str());
-
 
 			for (size_t j = i + 1; j < numBoxes; ++j) {
 				size_t compareIdx = indices[j];
@@ -89,7 +97,7 @@ namespace hpe_test {
 		float* confidence = interpreter->typed_output_tensor<float>(1);
 
 	
-		std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.75, 0.4);
+		std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.4, 0.65);
 		RCLCPP_INFO(this->get_logger(), "Found %ld people", filtered_indices.size());
 
 		cv::Mat boxes_img = img.clone();

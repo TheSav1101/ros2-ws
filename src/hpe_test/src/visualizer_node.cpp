@@ -1,56 +1,25 @@
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/image.hpp>
-#include <opencv4/opencv2/opencv.hpp>
-#include "hpe_msgs/msg/hpe2d.hpp"
-#include <deque>
-#include <cv_bridge/cv_bridge.hpp>
-#include <std_msgs/msg/header.hpp>
+#include <hpe_test/visualizer_node.hpp>
 
 using std::placeholders::_1;
 
-struct Keypoint
-{
-    float x;
-    float y;
-};
-
-struct Keypoint_score
-{
-    float x;
-    float y;
-    float score;
-};
-
-class visualizerNode : public rclcpp::Node
-{
-private:
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_;
-    rclcpp::Subscription<hpe_msgs::msg::Hpe2d>::SharedPtr subscription_hpe;
-    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_image;
-    sensor_msgs::msg::Image image;
-    cv_bridge::CvImagePtr cv_ptr;
-    cv_bridge::CvImage cv_image_msg_bridge;
-    cv::Mat image_cv;
-    sensor_msgs::msg::Image output;
-
-    void callback2d(hpe_msgs::msg::Hpe2d hpe_result)
+namespace hpe_test{
+    void VisualizerNode::callback2d(const std::shared_ptr<hpe_msgs::msg::Slave> hpe_result)
     {
         RCLCPP_INFO(this->get_logger(), "Working on a new image...");
 
         std::vector<Keypoint_score> keypoints_score = keypoints_scores_from_msgs(hpe_result);
 
-        std::vector<Keypoint> kp_viz = keypoints_and_edges_for_display(keypoints_score, image.height, image.width);
+        std::vector<Keypoint> kp_viz = keypoints_and_edges_for_display(keypoints_score, image.height, image.width, 0.4);
 
         try
         {
-
             cv_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::BGR8);
 
             image_cv = cv_ptr->image;
 
             for (size_t i = 0; i < kp_viz.size(); i++)
             {
-                cv::circle(image_cv, cv::Point(kp_viz[i].x, kp_viz[i].y), 2, cv::Scalar(0, 255, 0));
+                cv::circle(image_cv, cv::Point(kp_viz[i].x, kp_viz[i].y), 4, cv::Scalar(255, 0, 255));
             }
 
             cv_image_msg_bridge = cv_bridge::CvImage(image.header, sensor_msgs::image_encodings::BGR8, image_cv);
@@ -63,34 +32,33 @@ private:
             RCLCPP_ERROR_STREAM(rclcpp::get_logger("cv_bridge"), "cv_bridge exception: " << e.what());
         }
 
-        RCLCPP_INFO(this->get_logger(), "Fnished visualizing the image...");
+        double delay = (this->get_clock()->now() - hpe_result->header.stamp).seconds();
+
+        RCLCPP_INFO(this->get_logger(), "Delay: %f", delay);
     }
 
-    void image_callback(sensor_msgs::msg::Image msg)
+    void VisualizerNode::image_callback(sensor_msgs::msg::Image msg)
     {
         image = msg;
     }
 
-    std::vector<Keypoint_score> keypoints_scores_from_msgs(hpe_msgs::msg::Hpe2d msg)
+    std::vector<Keypoint_score> VisualizerNode::keypoints_scores_from_msgs(const std::shared_ptr<hpe_msgs::msg::Slave> msg)
     {
         std::vector<Keypoint_score> kpts = {};
-        for (int i = 0; i < msg.dim; i++)
-        {
-            Keypoint_score kpt{msg.joints_x[i], msg.joints_y[i], msg.confidence[i]};
-            kpts.push_back(kpt);
+        for (int i = 0; i < msg->skeletons_n; i++){
+            for (int j = 0; j < msg->all_joints[i].dim; j++){
+                Keypoint_score kpt{msg->all_joints[i].x[j], msg->all_joints[i].y[j], msg->all_joints[i].confidence[j]};
+                kpts.push_back(kpt);
+            }
         }
 
         return kpts;
     }
 
-    std::vector<Keypoint> keypoints_and_edges_for_display(
-        const std::vector<Keypoint_score> &keypoints_with_scores,
-        int height,
-        int width,
-        float keypoint_threshold = 0.5)
-    {
+    std::vector<Keypoint> VisualizerNode::keypoints_and_edges_for_display(const std::vector<Keypoint_score> &keypoints_with_scores, int height, int width, float keypoint_threshold){
 
         std::vector<Keypoint> keypoints_all;
+
 
         for (size_t i = 0; i < keypoints_with_scores.size(); ++i)
         {
@@ -105,33 +73,19 @@ private:
                 keypoints_all.push_back(keypoint);
             }
         }
-
         return keypoints_all;
     }
 
-public:
-    visualizerNode(std::string name, std::string raw_topic, std::string worker_topic) : Node("visualizer_" + name)
-    {
+    VisualizerNode::~VisualizerNode(){}
+
+    VisualizerNode::VisualizerNode(std::string name) : Node("visualizer_" + name){
 
         publisher_ = this->create_publisher<sensor_msgs::msg::Image>("/hpe_visual/" + name, 10);
 
-        subscription_hpe = this->create_subscription<hpe_msgs::msg::Hpe2d>(
-            worker_topic, 10, std::bind(&visualizerNode::callback2d, this, _1));
+        subscription_slave_ = this->create_subscription<hpe_msgs::msg::Slave>(
+            "/slave_" + name, 10, std::bind(&VisualizerNode::callback2d, this, _1));
 
-        subscription_image = this->create_subscription<sensor_msgs::msg::Image>(
-            raw_topic, 10, std::bind(&visualizerNode::image_callback, this, _1));
+        subscription_image_ = this->create_subscription<sensor_msgs::msg::Image>(
+            "/boxes_" + name, 10, std::bind(&VisualizerNode::image_callback, this, _1));
     }
 };
-
-int main(int argc, char *argv[])
-{
-    if (argc != 4)
-    {
-        std::cout << "Usage: ros2 run hpe_test visualizer <name> <raw_image_topic> <worker_topic>\n";
-        return 0;
-    }
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<visualizerNode>(argv[1], argv[2], argv[3]));
-    rclcpp::shutdown();
-    return 0;
-}

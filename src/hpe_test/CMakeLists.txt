@@ -44,7 +44,7 @@ include_directories(
 )
 
 add_executable(worker src/worker_node_main.cpp src/worker_node.cpp src/data.cpp)
-#add_executable(visualizer src/visualizer_node.cpp)
+add_executable(visualizer src/visualizer_node_main.cpp src/visualizer_node.cpp)
 add_executable(master src/master_node_main.cpp src/master_node.cpp)
 add_executable(slave src/slave_node_main.cpp src/slave_node.cpp src/worker_node.cpp src/data.cpp)
 
@@ -65,10 +65,10 @@ target_link_libraries(master ${cv_bridge_LIBRARIES})
 target_link_libraries(master ${sensor_msgs_LIBRARIES})
 target_link_libraries(master ${std_msgs_LIBRARIES})
 
-#target_link_libraries(visualizer ${OpenCV_LIBS})
-#target_link_libraries(visualizer ${cv_bridge_LIBRARIES})
-#target_link_libraries(visualizer ${sensor_msgs_LIBRARIES})
-#target_link_libraries(visualizer ${std_msgs_LIBRARIES})
+target_link_libraries(visualizer ${OpenCV_LIBS})
+target_link_libraries(visualizer ${cv_bridge_LIBRARIES})
+target_link_libraries(visualizer ${sensor_msgs_LIBRARIES})
+target_link_libraries(visualizer ${std_msgs_LIBRARIES})
 
 target_link_libraries(slave ${tensorflowlite_LIBRARIES})
 target_link_libraries(slave ${OpenCV_LIBS})
@@ -77,12 +77,12 @@ target_link_libraries(slave ${sensor_msgs_LIBRARIES})
 target_link_libraries(slave ${std_msgs_LIBRARIES})
 
 ament_target_dependencies(worker rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge)
-#ament_target_dependencies(visualizer rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
+ament_target_dependencies(visualizer rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 ament_target_dependencies(master rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 ament_target_dependencies(slave rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge)
 
 install(TARGETS
-  #visualizer
+  visualizer
   master
   slave
   DESTINATION lib/${PROJECT_NAME})

@@ -31,15 +31,11 @@ namespace hpe_test{
 				out[j].push_back(output_data[i * output_dims->data[3] + j]);
 			}
 		}
-
-		//UNTESTED, se ci sono errori guardate qui...
-		float scaleY = request->detection.box.height / request->detection.box.img_height;
-		float scaleX = request->detection.box.width  / request->detection.box.img_width;
-
+		
 		//Deal with warping...
 		for(size_t i = 0; i < out[0].size(); i++){
-			out[0][i] = out[0][i]*scaleY + request->detection.box.y;
-			out[1][i] = out[1][i]*scaleX + request->detection.box.x;
+			out[0][i] = (out[0][i]*(float)request->detection.box.height + (float)request->detection.box.y)/(float)request->detection.box.img_height;
+			out[1][i] = (out[1][i]*(float)request->detection.box.width  + (float)request->detection.box.x)/(float)request->detection.box.img_width;
 		}
 
 		response->hpe2d.header = request->detection.image.header;
@@ -81,12 +77,14 @@ namespace hpe_test{
 		input_dims = interpreter->tensor(input_tensor_idx)->dims;
 		output_dims = interpreter->tensor(output_tensor_idx)->dims;
 		
+		input_size = 1; 
 		int num_inputs = interpreter->inputs().size();
     	for (int i = 0; i < num_inputs; ++i) {
         	const TfLiteTensor* input_tensor = interpreter->tensor(interpreter->inputs()[i]);
         	RCLCPP_INFO(this->get_logger(), "Input Tensor %d: Type=%d", i, input_tensor->type);
         	RCLCPP_INFO(this->get_logger(), "Input Tensor %d Dimensions: ", i);
 			for (int j = 0; j < input_tensor->dims->size; ++j) {
+				input_size *= input_tensor->dims->data[j];
 				RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j, input_tensor->dims->data[j]);
 			}
 		}
