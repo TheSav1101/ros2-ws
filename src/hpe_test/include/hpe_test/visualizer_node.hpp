@@ -44,7 +44,8 @@ namespace hpe_test {
             cv_bridge::CvImage cv_image_msg_bridge;
             cv::Mat image_cv;
             sensor_msgs::msg::Image output;
-
+            double avg_delay;
+            int delay_window;
         };
 
 } 

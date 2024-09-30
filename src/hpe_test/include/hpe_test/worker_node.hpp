@@ -44,6 +44,9 @@ namespace hpe_test {
             uint8_t *input_data;
             float *output_data;
 
+            int delay_window;
+            double avg_delay;
+            
             hpe_msgs::msg::Hpe2d hpe_msg;
         };
 

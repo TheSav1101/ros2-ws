@@ -7,7 +7,6 @@ using std::placeholders::_2;
 namespace hpe_test{
 		
 	void WorkerNode::service(const std::shared_ptr<hpe_msgs::srv::Estimate::Request> request, std::shared_ptr<hpe_msgs::srv::Estimate::Response> response) {
-		//RCLCPP_INFO(this->get_logger(), "Working on a new image");
 
 		try {
 			cv_ptr = cv_bridge::toCvCopy(request->detection.image, sensor_msgs::image_encodings::BGR8);
@@ -43,6 +42,13 @@ namespace hpe_test{
 		response->hpe2d.joints.x = out[1];
 		response->hpe2d.joints.confidence = out[2];
 		response->hpe2d.joints.dim = output_dims->data[2];
+		double delay = (this->get_clock()->now() - request->detection.image.header.stamp).seconds();
+
+        avg_delay = (avg_delay*delay_window + delay);
+        delay_window++;
+        avg_delay /= delay_window;
+
+		RCLCPP_INFO(this->get_logger(), "Average delay: %f, current delay: %f", avg_delay, delay);
 	}
 
 	void WorkerNode::setupTensors() {
@@ -106,6 +112,8 @@ namespace hpe_test{
 	WorkerNode::WorkerNode(std::string name, int model_): Node("worker_" + name) {
 		hpe_model_n = model_;
 		setupTensors();
+		delay_window = 0;
+		avg_delay = 0.0;
 		service_ = this->create_service<hpe_msgs::srv::Estimate>("estimate" + name, std::bind(&WorkerNode::service, this, _1, _2));
 		RCLCPP_INFO(this->get_logger(), "worker_%s is ready", name.c_str());
 	}

@@ -46,7 +46,8 @@ include_directories(
 add_executable(worker src/worker_node_main.cpp src/worker_node.cpp src/data.cpp)
 add_executable(visualizer src/visualizer_node_main.cpp src/visualizer_node.cpp)
 add_executable(master src/master_node_main.cpp src/master_node.cpp)
-add_executable(slave src/slave_node_main.cpp src/slave_node.cpp src/worker_node.cpp src/data.cpp)
+add_executable(webcam src/webcam_node_main.cpp src/webcam_node.cpp)
+add_executable(slave src/slave_node_main.cpp src/slave_node.cpp src/worker_node.cpp src/webcam_node.cpp src/data.cpp)
 
 # Link libraries
 message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflowlite")
@@ -59,6 +60,11 @@ target_link_libraries(worker ${OpenCV_LIBS})
 target_link_libraries(worker ${cv_bridge_LIBRARIES})
 target_link_libraries(worker ${sensor_msgs_LIBRARIES})
 target_link_libraries(worker ${std_msgs_LIBRARIES})
+
+target_link_libraries(webcam ${OpenCV_LIBS})
+target_link_libraries(webcam ${cv_bridge_LIBRARIES})
+target_link_libraries(webcam ${sensor_msgs_LIBRARIES})
+target_link_libraries(webcam ${std_msgs_LIBRARIES})
 
 target_link_libraries(master ${OpenCV_LIBS})
 target_link_libraries(master ${cv_bridge_LIBRARIES})
@@ -79,12 +85,14 @@ target_link_libraries(slave ${std_msgs_LIBRARIES})
 ament_target_dependencies(worker rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge)
 ament_target_dependencies(visualizer rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 ament_target_dependencies(master rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
+ament_target_dependencies(webcam rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 ament_target_dependencies(slave rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge)
 
 install(TARGETS
   visualizer
   master
   slave
+  webcam
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY include/

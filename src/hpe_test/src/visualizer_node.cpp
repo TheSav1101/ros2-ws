@@ -34,7 +34,10 @@ namespace hpe_test{
 
         double delay = (this->get_clock()->now() - hpe_result->header.stamp).seconds();
 
-        RCLCPP_INFO(this->get_logger(), "Delay: %f", delay);
+        avg_delay = (avg_delay*delay_window + delay);
+        delay_window++;
+        avg_delay /= delay_window;
+        RCLCPP_INFO(this->get_logger(), "Average delay: %f, window: %d", avg_delay, delay_window);
     }
 
     void VisualizerNode::image_callback(sensor_msgs::msg::Image msg)
@@ -79,7 +82,8 @@ namespace hpe_test{
     VisualizerNode::~VisualizerNode(){}
 
     VisualizerNode::VisualizerNode(std::string name) : Node("visualizer_" + name){
-
+        delay_window = 0;
+        avg_delay = 0.0;
         publisher_ = this->create_publisher<sensor_msgs::msg::Image>("/hpe_visual/" + name, 10);
 
         subscription_slave_ = this->create_subscription<hpe_msgs::msg::Slave>(

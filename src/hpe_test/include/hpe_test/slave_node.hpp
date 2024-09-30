@@ -15,6 +15,7 @@
 #include "hpe_msgs/msg/slave.hpp"
 #include "hpe_msgs/msg/box.hpp"
 #include "hpe_test/worker_node.hpp"
+#include "hpe_test/webcam_node.hpp"
 #include "hpe_test/data.hpp"
 #include "hpe_msgs/srv/calibration.hpp"
 
@@ -35,8 +36,9 @@ namespace hpe_test {
 			void open_camera();
 			void findPpl(cv::Mat&, std_msgs::msg::Header);
 			void calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request, std::shared_ptr<hpe_msgs::srv::Calibration::Response> response);
+			void group_outputs();
 
-			//model numbers (see data.inl)
+			//model numbers (see data.cpp)
 			int detection_model_n = 0; 
 			int hpe_model_n = 0;
 
@@ -56,7 +58,14 @@ namespace hpe_test {
 					
 			//name
 			std::string node_name;
-			
+
+			//AIUTO, il multithreading
+			std::thread webcam_thread;
+			std::thread loop_thread;
+			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> working_futures_;
+			std::mutex working_futures_mutex_;
+
+
 			//worker stuff
 			std::vector<std::thread> worker_threads;
 			int workers_n = 0;
@@ -74,7 +83,6 @@ namespace hpe_test {
 			cv_bridge::CvImage cv_image_msg_bridge;
 			cv_bridge::CvImagePtr cv_ptr;
 			cv::Mat small;
-			cv::VideoCapture cap;
 			sensor_msgs::msg::Image small_msg;
 			float *input_data;
 			float *output_data;

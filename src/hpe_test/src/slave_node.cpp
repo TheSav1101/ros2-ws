@@ -7,30 +7,30 @@ using std::placeholders::_2;
 namespace hpe_test {
 
 	float SlaveNode::computeIoU(const float* box1, const float* box2) {
-    float half_w1 = box1[2] / 2.0;
-    float half_h1 = box1[3] / 2.0;
-    float half_w2 = box2[2] / 2.0;
-    float half_h2 = box2[3] / 2.0;
+		float half_w1 = box1[2] / 2.0;
+		float half_h1 = box1[3] / 2.0;
+		float half_w2 = box2[2] / 2.0;
+		float half_h2 = box2[3] / 2.0;
 
-    float x1 = std::max(box1[0] - half_w1, box2[0] - half_w2);
-    float y1 = std::max(box1[1] - half_h1, box2[1] - half_h2);
-    float x2 = std::min(box1[0] + half_w1, box2[0] + half_w2);
-    float y2 = std::min(box1[1] + half_h1, box2[1] + half_h2);
+		float x1 = std::max(box1[0] - half_w1, box2[0] - half_w2);
+		float y1 = std::max(box1[1] - half_h1, box2[1] - half_h2);
+		float x2 = std::min(box1[0] + half_w1, box2[0] + half_w2);
+		float y2 = std::min(box1[1] + half_h1, box2[1] + half_h2);
 
-    float intersectionWidth = std::max(0.0f, x2 - x1);
-    float intersectionHeight = std::max(0.0f, y2 - y1);
-    float intersectionArea = intersectionWidth * intersectionHeight;
+		float intersectionWidth = std::max(0.0f, x2 - x1);
+		float intersectionHeight = std::max(0.0f, y2 - y1);
+		float intersectionArea = intersectionWidth * intersectionHeight;
 
-    float box1Area = box1[2] * box1[3];
-    float box2Area = box2[2] * box2[3];
+		float box1Area = box1[2] * box1[3];
+		float box2Area = box2[2] * box2[3];
 
-    float unionArea = box1Area + box2Area - intersectionArea;
-    if (unionArea <= 0.0) {
-        return 0.0;
-    }
+		float unionArea = box1Area + box2Area - intersectionArea;
+		if (unionArea <= 0.0) {
+			return 0.0;
+		}
 
-    return intersectionArea / unionArea;
-}
+		return intersectionArea / unionArea;
+	}
 
 	std::vector<size_t> SlaveNode::nonMaxSuppression(float* boxes, float* scores, size_t numBoxes, float iouThreshold, float minConfidence) {
 		std::vector<size_t> indices(numBoxes);
@@ -75,14 +75,19 @@ namespace hpe_test {
 
   	void SlaveNode::findPpl(cv::Mat &img, std_msgs::msg::Header header) {
 
+		RCLCPP_WARN(this->get_logger(), "Here1");
+
 		cv::resize(img, small, cv::Size(DETECTION_MODEL_WIDTH[detection_model_n], DETECTION_MODEL_HEIGHT[detection_model_n]), cv::INTER_LINEAR);
 
 		// TODO togliere sta roba
 		cv::Mat floatImg;
 		small.convertTo(floatImg, CV_32FC3, 1.0/255.0);
 		
+		RCLCPP_WARN(this->get_logger(), "Here2");
 
 		memcpy(input_data, floatImg.data, input_size * sizeof(float));
+
+		RCLCPP_WARN(this->get_logger(), "Here3");
 
 		if (!interpreter) {
 			RCLCPP_ERROR(this->get_logger(), "ERROR: Interpreter not initialized");
@@ -93,20 +98,27 @@ namespace hpe_test {
 			return;
 		}
 
+		RCLCPP_WARN(this->get_logger(), "Here4");
+
 		float* boxes = interpreter->typed_output_tensor<float>(0);
 		float* confidence = interpreter->typed_output_tensor<float>(1);
 
 	
 		std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.4, 0.65);
-		RCLCPP_INFO(this->get_logger(), "Found %ld people", filtered_indices.size());
+		//RCLCPP_INFO(this->get_logger(), "Found %ld people", filtered_indices.size());
 
 		cv::Mat boxes_img = img.clone();
+
+		RCLCPP_WARN(this->get_logger(), "Here5");
 
 		float scaleX = (float) img.cols / (float) DETECTION_MODEL_WIDTH[detection_model_n];
 		float scaleY = (float) img.rows / (float) DETECTION_MODEL_HEIGHT[detection_model_n];
 
 		size_t clients_index = 0;
+
 		std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> futures = {};
+
+		RCLCPP_WARN(this->get_logger(), "Here6");
 
 		for(size_t i: filtered_indices){
 
@@ -120,6 +132,8 @@ namespace hpe_test {
 				cv::Scalar(0, 255, 0), 2);
 
 			cv::Rect box(x1*scaleX, y1*scaleY, (int)(boxes[4 * i + 2] * scaleX), (int)(boxes[4 * i + 3] * scaleY));
+
+			RCLCPP_WARN(this->get_logger(), "Here6A");
 
 			box.x = std::max(0, box.x);
 			box.y = std::max(0, box.y);
@@ -135,6 +149,8 @@ namespace hpe_test {
 			auto box_msg = hpe_msgs::msg::Box();
 			auto request = std::make_shared<hpe_msgs::srv::Estimate::Request>();
 
+			RCLCPP_WARN(this->get_logger(), "Here6B");
+
 			box_msg.x 			= box.x;
 			box_msg.y 			= box.y;
 			box_msg.width 		= box.width;
@@ -147,6 +163,7 @@ namespace hpe_test {
 
 			request->detection 	= det_msg;
 
+			RCLCPP_WARN(this->get_logger(), "Here6C");
 
 			if (clients_index >= clients_.size()) {
 				RCLCPP_WARN(this->get_logger(), "worker_%s_%ld was not created yet, i will create a new one...", node_name.c_str(), clients_index);
@@ -163,34 +180,54 @@ namespace hpe_test {
 
 		}
 
+		RCLCPP_WARN(this->get_logger(), "Here7");
+
 		cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, boxes_img);
 		cv_image_msg_bridge.toImageMsg(small_msg);
 		publisher_boxes_->publish(small_msg);
 
+		RCLCPP_WARN(this->get_logger(), "Here8");
+
 		std::vector<hpe_msgs::msg::Joints2d> all_joints = {};
 
-        for (size_t i = 0; i < futures.size(); ++i)
-        {
+        for (size_t i = 0; i < futures.size(); ++i){
+
+			RCLCPP_WARN(this->get_logger(), "Here8A");
             auto result = rclcpp::spin_until_future_complete(this->get_node_base_interface(), futures[i]);
-            if (result == rclcpp::FutureReturnCode::SUCCESS)
-            {
+            RCLCPP_WARN(this->get_logger(), "Here8B");
+			if (result == rclcpp::FutureReturnCode::SUCCESS){
+				RCLCPP_WARN(this->get_logger(), "Here8C");
                 auto response = futures[i].get();
-                RCLCPP_INFO(this->get_logger(), "Received response from worker_%s_%zu", node_name.c_str(), i);
+                //RCLCPP_INFO(this->get_logger(), "Received response from worker_%s_%zu", node_name.c_str(), i);
 				all_joints.push_back(response->hpe2d.joints);
 
             }
-            else
-            {
+            else{
+				RCLCPP_WARN(this->get_logger(), "Here8D");
                 RCLCPP_ERROR(this->get_logger(), "Failed to get response from worker_%s_%zu", node_name.c_str(), i);
             }
         }
+
+		RCLCPP_WARN(this->get_logger(), "Here9");
 
 		hpe_msgs::msg::Slave slave_msg = hpe_msgs::msg::Slave();
 		slave_msg.header = header;
 		slave_msg.all_joints = all_joints;
 		slave_msg.skeletons_n = all_joints.size();
 
+		RCLCPP_WARN(this->get_logger(), "Here10");
+
 		publisher_slave_->publish(slave_msg);
+	}
+
+	void SlaveNode::group_outputs(){
+        rclcpp::Rate loop_rate(10); 
+        while (rclcpp::ok())
+        {
+            RCLCPP_INFO(this->get_logger(), "Doing continuous processing...");
+
+            loop_rate.sleep();
+        }
 	}
 
 	void SlaveNode::setupTensors() {
@@ -262,33 +299,6 @@ namespace hpe_test {
 		findPpl(cv_ptr->image, msg.header);
 	}
 
-  	void SlaveNode::open_camera() {
-		cap = cv::VideoCapture(0);
-
-		RCLCPP_INFO(this->get_logger(), "Ready");
-		if (!cap.isOpened()) {
-			RCLCPP_ERROR(this->get_logger(), "ERROR: no video feed...");
-		}
-
-			RCLCPP_INFO(this->get_logger(), "Starting loop");
-		while (rclcpp::ok()) {
-			cv::Mat frame;
-			cap >> frame;
-
-			if (frame.empty()) {
-				RCLCPP_ERROR(this->get_logger(), "ERROR: missin a frame...");
-			}
-
-			std_msgs::msg::Header header;
-			header.set__stamp(this->get_clock()->now());
-			header.set__frame_id(node_name);
-
-			findPpl(frame, header);
-		}
-
-		cap.release();
-	}
-
 	SlaveNode::SlaveNode(std::string name, std::string raw_topic, int hpe_model_n_, int detection_model_n_, int starting_workers) : Node(name) {
 		node_name = name;
 
@@ -312,23 +322,41 @@ namespace hpe_test {
 		}
 
 		calibration_service_ = this->create_service<hpe_msgs::srv::Calibration>("/calibration_" + name, std::bind(&SlaveNode::calibrationService, this, _1, _2));
-
 		setupTensors();
+
 		if (raw_topic != "null") {
 			subscription_ = this->create_subscription<sensor_msgs::msg::Image>(raw_topic, 10, std::bind(&SlaveNode::callback, this, _1));
 			RCLCPP_INFO(this->get_logger(), "Ready");
 		} else {
 			RCLCPP_INFO(this->get_logger(), "Realsense camera not found, using webcam...");
-			open_camera();
+			webcam_thread = std::thread([name, this]() {
+				auto webcam_node = std::make_shared<hpe_test::WebcamNode>(name);
+				rclcpp::spin(webcam_node);
+				rclcpp::shutdown();
+			});
+			subscription_ = this->create_subscription<sensor_msgs::msg::Image>("/webcam_" + name, 10, std::bind(&SlaveNode::callback, this, _1));
 		}
+
+		loop_thread = std::thread(&SlaveNode::group_outputs, this);
   	}
 
 	SlaveNode::~SlaveNode(){
+
+
+		if(webcam_thread.joinable()){
+			webcam_thread.join();
+		}
+
+		if(loop_thread.joinable()){
+			loop_thread.join();
+		}
+
 		for (auto& t : worker_threads) {
 			if (t.joinable()) {
 				t.join();
 			}
 		}
+		
 	}
 
 	void SlaveNode::calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request, std::shared_ptr<hpe_msgs::srv::Calibration::Response> response){
