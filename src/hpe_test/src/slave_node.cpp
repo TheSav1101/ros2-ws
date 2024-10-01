@@ -75,19 +75,13 @@ namespace hpe_test {
 
   	void SlaveNode::findPpl(cv::Mat &img, std_msgs::msg::Header header) {
 
-		RCLCPP_WARN(this->get_logger(), "Here1");
-
 		cv::resize(img, small, cv::Size(DETECTION_MODEL_WIDTH[detection_model_n], DETECTION_MODEL_HEIGHT[detection_model_n]), cv::INTER_LINEAR);
 
 		// TODO togliere sta roba
 		cv::Mat floatImg;
 		small.convertTo(floatImg, CV_32FC3, 1.0/255.0);
-		
-		RCLCPP_WARN(this->get_logger(), "Here2");
-
+	
 		memcpy(input_data, floatImg.data, input_size * sizeof(float));
-
-		RCLCPP_WARN(this->get_logger(), "Here3");
 
 		if (!interpreter) {
 			RCLCPP_ERROR(this->get_logger(), "ERROR: Interpreter not initialized");
@@ -97,9 +91,6 @@ namespace hpe_test {
 			RCLCPP_ERROR( this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
 			return;
 		}
-
-		RCLCPP_WARN(this->get_logger(), "Here4");
-
 		float* boxes = interpreter->typed_output_tensor<float>(0);
 		float* confidence = interpreter->typed_output_tensor<float>(1);
 
@@ -109,16 +100,12 @@ namespace hpe_test {
 
 		cv::Mat boxes_img = img.clone();
 
-		RCLCPP_WARN(this->get_logger(), "Here5");
-
 		float scaleX = (float) img.cols / (float) DETECTION_MODEL_WIDTH[detection_model_n];
 		float scaleY = (float) img.rows / (float) DETECTION_MODEL_HEIGHT[detection_model_n];
 
 		size_t clients_index = 0;
 
-		std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> futures = {};
-
-		RCLCPP_WARN(this->get_logger(), "Here6");
+		futures_vector_working_callback_ = {};
 
 		for(size_t i: filtered_indices){
 
@@ -132,8 +119,6 @@ namespace hpe_test {
 				cv::Scalar(0, 255, 0), 2);
 
 			cv::Rect box(x1*scaleX, y1*scaleY, (int)(boxes[4 * i + 2] * scaleX), (int)(boxes[4 * i + 3] * scaleY));
-
-			RCLCPP_WARN(this->get_logger(), "Here6A");
 
 			box.x = std::max(0, box.x);
 			box.y = std::max(0, box.y);
@@ -149,7 +134,6 @@ namespace hpe_test {
 			auto box_msg = hpe_msgs::msg::Box();
 			auto request = std::make_shared<hpe_msgs::srv::Estimate::Request>();
 
-			RCLCPP_WARN(this->get_logger(), "Here6B");
 
 			box_msg.x 			= box.x;
 			box_msg.y 			= box.y;
@@ -163,14 +147,13 @@ namespace hpe_test {
 
 			request->detection 	= det_msg;
 
-			RCLCPP_WARN(this->get_logger(), "Here6C");
 
 			if (clients_index >= clients_.size()) {
 				RCLCPP_WARN(this->get_logger(), "worker_%s_%ld was not created yet, i will create a new one...", node_name.c_str(), clients_index);
-    			(void)std::async(std::launch::async, &SlaveNode::create_new_worker, this);
+    			(void) std::async(std::launch::async, &SlaveNode::create_new_worker, this);
 			}else{
 				if(clients_[clients_index]->wait_for_service(std::chrono::seconds(0))){
-					futures.push_back(clients_[clients_index]->async_send_request(request).share());
+					futures_vector_working_callback_.push_back(clients_[clients_index]->async_send_request(request).share());
 				}else{
 					RCLCPP_WARN(this->get_logger(), "worker_%s_%ld, is not ready yet...", node_name.c_str(), clients_index);
 				}
@@ -180,53 +163,53 @@ namespace hpe_test {
 
 		}
 
-		RCLCPP_WARN(this->get_logger(), "Here7");
+		{
+			std::lock_guard<std::mutex> lock(queue_mutex_);
+			futures_vector_queue_.push(futures_vector_working_callback_);
+		}
 
 		cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, boxes_img);
 		cv_image_msg_bridge.toImageMsg(small_msg);
 		publisher_boxes_->publish(small_msg);
-
-		RCLCPP_WARN(this->get_logger(), "Here8");
-
-		std::vector<hpe_msgs::msg::Joints2d> all_joints = {};
-
-        for (size_t i = 0; i < futures.size(); ++i){
-
-			RCLCPP_WARN(this->get_logger(), "Here8A");
-            auto result = rclcpp::spin_until_future_complete(this->get_node_base_interface(), futures[i]);
-            RCLCPP_WARN(this->get_logger(), "Here8B");
-			if (result == rclcpp::FutureReturnCode::SUCCESS){
-				RCLCPP_WARN(this->get_logger(), "Here8C");
-                auto response = futures[i].get();
-                //RCLCPP_INFO(this->get_logger(), "Received response from worker_%s_%zu", node_name.c_str(), i);
-				all_joints.push_back(response->hpe2d.joints);
-
-            }
-            else{
-				RCLCPP_WARN(this->get_logger(), "Here8D");
-                RCLCPP_ERROR(this->get_logger(), "Failed to get response from worker_%s_%zu", node_name.c_str(), i);
-            }
-        }
-
-		RCLCPP_WARN(this->get_logger(), "Here9");
-
-		hpe_msgs::msg::Slave slave_msg = hpe_msgs::msg::Slave();
-		slave_msg.header = header;
-		slave_msg.all_joints = all_joints;
-		slave_msg.skeletons_n = all_joints.size();
-
-		RCLCPP_WARN(this->get_logger(), "Here10");
-
-		publisher_slave_->publish(slave_msg);
 	}
 
 	void SlaveNode::group_outputs(){
-        rclcpp::Rate loop_rate(10); 
+        rclcpp::Rate loop_rate(30); 
         while (rclcpp::ok())
         {
-            RCLCPP_INFO(this->get_logger(), "Doing continuous processing...");
+			//pop della queue
+			{
+				std::lock_guard<std::mutex> lock(queue_mutex_);
+		        if (futures_vector_queue_.empty()) {
+					RCLCPP_WARN(this->get_logger(), "Future queue is empty, skipping this loop iteration.");
+					continue;
+				}
+				futures_vector_working_loop_ = futures_vector_queue_.front();
+				futures_vector_queue_.pop();
+			}
+			std_msgs::msg::Header header = std_msgs::msg::Header();
+            std::vector<hpe_msgs::msg::Joints2d> all_joints = {};
 
-            loop_rate.sleep();
+			for (size_t i = 0; i < futures_vector_working_loop_.size(); ++i){
+				futures_vector_working_loop_[i].wait();
+				try{
+					auto response = futures_vector_working_loop_[i].get();
+					//RCLCPP_INFO(this->get_logger(), "Received response from worker_%s_%zu", node_name.c_str(), i);
+					all_joints.push_back(response->hpe2d.joints);
+					header = response->hpe2d.header;
+
+				}
+				catch(const std::exception& e){
+					RCLCPP_ERROR(this->get_logger(), "Failed to get response from worker_%s_%zu", node_name.c_str(), i);
+				}
+			}
+
+			hpe_msgs::msg::Slave slave_msg = hpe_msgs::msg::Slave();
+			slave_msg.header = header;
+			slave_msg.all_joints = all_joints;
+			slave_msg.skeletons_n = all_joints.size();
+
+			publisher_slave_->publish(slave_msg);
         }
 	}
 

@@ -62,8 +62,10 @@ namespace hpe_test {
 			//AIUTO, il multithreading
 			std::thread webcam_thread;
 			std::thread loop_thread;
-			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> working_futures_;
-			std::mutex working_futures_mutex_;
+			std::queue<std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture>> futures_vector_queue_;
+			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> futures_vector_working_loop_;
+			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> futures_vector_working_callback_;
+			std::mutex queue_mutex_;
 
 
 			//worker stuff
