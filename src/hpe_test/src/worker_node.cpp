@@ -18,10 +18,14 @@ namespace hpe_test{
 
 		memcpy(input_data, cv_ptr->image.data, input_size * sizeof(uint8_t));
 
+		auto start = this->get_clock()->now();
+
 		if (interpreter->Invoke() != kTfLiteOk)
 			RCLCPP_ERROR(
 					this->get_logger(),
 					"ERROR: Something went wrong while invoking the interpreter...");
+
+		double delay = (this->get_clock()->now() - start).seconds();
 
 		std::vector<std::vector<float>> out(output_dims->data[3]);
 
@@ -42,7 +46,7 @@ namespace hpe_test{
 		response->hpe2d.joints.x = out[1];
 		response->hpe2d.joints.confidence = out[2];
 		response->hpe2d.joints.dim = output_dims->data[2];
-		double delay = (this->get_clock()->now() - request->detection.image.header.stamp).seconds();
+		
 
         avg_delay = (avg_delay*delay_window + delay);
         delay_window++;
