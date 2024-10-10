@@ -14,6 +14,7 @@ namespace hpe_test {
 		public:
 			WebcamNode(std::string name);
 			~WebcamNode();
+			void stop();
 
 		private:
 			void open_camera();
@@ -21,7 +22,7 @@ namespace hpe_test {
 			cv_bridge::CvImage cv_image_msg_bridge;
 			cv::VideoCapture cap;
 			sensor_msgs::msg::Image msg;
-			
+			std::atomic<bool> running_;
 			//publishers
 			rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_raw_;
 					

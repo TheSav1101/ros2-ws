@@ -69,12 +69,11 @@ namespace hpe_test {
 		worker_threads.push_back(std::thread([name, this]() {
 			auto worker_node = std::make_shared<hpe_test::WorkerNode>(name, hpe_model_n);
 			rclcpp::spin(worker_node);
-			rclcpp::shutdown();
 		}));
 	}
 
   	void SlaveNode::findPpl(cv::Mat &img, std_msgs::msg::Header header) {
-
+		auto start = this->get_clock()->now();
 		cv::resize(img, small, cv::Size(DETECTION_MODEL_WIDTH[detection_model_n], DETECTION_MODEL_HEIGHT[detection_model_n]), cv::INTER_LINEAR);
 
 		// TODO togliere sta roba
@@ -105,7 +104,7 @@ namespace hpe_test {
 
 		size_t clients_index = 0;
 
-		futures_vector_working_callback_ = {};
+		std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> current_futures = {};
 
 		for(size_t i: filtered_indices){
 
@@ -153,63 +152,92 @@ namespace hpe_test {
     			(void) std::async(std::launch::async, &SlaveNode::create_new_worker, this);
 			}else{
 				if(clients_[clients_index]->wait_for_service(std::chrono::seconds(0))){
-					futures_vector_working_callback_.push_back(clients_[clients_index]->async_send_request(request).share());
+					current_futures.push_back(clients_[clients_index]->async_send_request(request).share());
 				}else{
 					RCLCPP_WARN(this->get_logger(), "worker_%s_%ld, is not ready yet...", node_name.c_str(), clients_index);
 				}
 			}
-
 			clients_index++;
-
 		}
 
+		if(current_futures.size() > 0)
 		{
 			std::lock_guard<std::mutex> lock(queue_mutex_);
-			futures_vector_queue_.push(futures_vector_working_callback_);
+			futures_vector_queue_.push(current_futures);
 		}
-
+		
 		cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, boxes_img);
 		cv_image_msg_bridge.toImageMsg(small_msg);
 		publisher_boxes_->publish(small_msg);
+		double delay = (this->get_clock()->now() - start).seconds();
+        avg_delay = (avg_delay*delay_window + delay);
+        delay_window++;
+        avg_delay /= delay_window;
 	}
 
-	void SlaveNode::group_outputs(){
+	void SlaveNode::loop(){
+		running_ = true;
         rclcpp::Rate loop_rate(30); 
-        while (rclcpp::ok())
+
+		std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> current_futures;
+        while (running_)
         {
-			//pop della queue
+			current_futures = {};
+			auto start = this->get_clock()->now();
+			
 			{
-				std::lock_guard<std::mutex> lock(queue_mutex_);
-		        if (futures_vector_queue_.empty()) {
-					RCLCPP_WARN(this->get_logger(), "Future queue is empty, skipping this loop iteration.");
+				std::unique_lock<std::mutex> lock(queue_mutex_);
+
+				if (futures_vector_queue_.empty()) {
+					//RCLCPP_WARN(this->get_logger(), "Future queue is empty, skipping this loop iteration.");
 					continue;
 				}
-				futures_vector_working_loop_ = futures_vector_queue_.front();
+
+				RCLCPP_WARN(this->get_logger(), "Future queue size: %ld", futures_vector_queue_.size());
+				current_futures = futures_vector_queue_.front();
 				futures_vector_queue_.pop();
 			}
+
+	
 			std_msgs::msg::Header header = std_msgs::msg::Header();
             std::vector<hpe_msgs::msg::Joints2d> all_joints = {};
 
-			for (size_t i = 0; i < futures_vector_working_loop_.size(); ++i){
-				futures_vector_working_loop_[i].wait();
-				try{
-					auto response = futures_vector_working_loop_[i].get();
-					//RCLCPP_INFO(this->get_logger(), "Received response from worker_%s_%zu", node_name.c_str(), i);
-					all_joints.push_back(response->hpe2d.joints);
-					header = response->hpe2d.header;
+			RCLCPP_WARN(this->get_logger(), "E, total: %ld", current_futures.size());
 
-				}
-				catch(const std::exception& e){
-					RCLCPP_ERROR(this->get_logger(), "Failed to get response from worker_%s_%zu", node_name.c_str(), i);
+			for (size_t i = 0; i < current_futures.size(); ++i){
+				RCLCPP_WARN(this->get_logger(), "E %ld", i);
+				auto result = current_futures[i].wait_for(std::chrono::milliseconds(1500));
+				if(result == std::future_status::ready){	
+					try{
+						auto response = current_futures[i].get();
+						all_joints.push_back(response->hpe2d.joints);
+						header = response->hpe2d.header;
+					}
+					catch(const std::exception& e){
+						RCLCPP_ERROR(this->get_logger(), "Failed to get response from worker_%s_%zu", node_name.c_str(), i);
+					}
+				}else {
+				    RCLCPP_ERROR(this->get_logger(), "Timeout while waiting for response from worker_%s_%zu", node_name.c_str(), i);
 				}
 			}
+
+			RCLCPP_WARN(this->get_logger(), "F");
 
 			hpe_msgs::msg::Slave slave_msg = hpe_msgs::msg::Slave();
 			slave_msg.header = header;
 			slave_msg.all_joints = all_joints;
 			slave_msg.skeletons_n = all_joints.size();
 
+			RCLCPP_WARN(this->get_logger(), "G");
+
 			publisher_slave_->publish(slave_msg);
+			double delay = (this->get_clock()->now() - start).seconds();
+			avg_delay_loop = (avg_delay_loop*delay_window_loop + delay);
+			delay_window_loop++;
+			avg_delay_loop /= delay_window_loop;
+
+			RCLCPP_ERROR(this->get_logger(), "One loop");
+			loop_rate.sleep();
         }
 	}
 
@@ -282,8 +310,17 @@ namespace hpe_test {
 		findPpl(cv_ptr->image, msg.header);
 	}
 
+	
+
 	SlaveNode::SlaveNode(std::string name, std::string raw_topic, int hpe_model_n_, int detection_model_n_, int starting_workers) : Node(name) {
 		node_name = name;
+		
+		avg_delay = 0.0;
+		avg_delay_loop = 0.0;
+		delay_window = 0;
+		delay_window_loop = 0;
+
+		futures_vector_queue_={};
 
 		hpe_model_n = hpe_model_n_;
 		detection_model_n = detection_model_n_;
@@ -313,23 +350,54 @@ namespace hpe_test {
 		} else {
 			RCLCPP_INFO(this->get_logger(), "Realsense camera not found, using webcam...");
 			webcam_thread = std::thread([name, this]() {
-				auto webcam_node = std::make_shared<hpe_test::WebcamNode>(name);
+				webcam_node = std::make_shared<hpe_test::WebcamNode>(name);
 				rclcpp::spin(webcam_node);
-				rclcpp::shutdown();
 			});
 			subscription_ = this->create_subscription<sensor_msgs::msg::Image>("/webcam_" + name, 10, std::bind(&SlaveNode::callback, this, _1));
 		}
 
-		loop_thread = std::thread(&SlaveNode::group_outputs, this);
+		loop_thread = std::thread(&SlaveNode::loop, this);
+		loop_thread.detach();
   	}
 
-	SlaveNode::~SlaveNode(){
-
+	void SlaveNode::shutdown(){
+		RCLCPP_INFO(this->get_logger(), "Shutting down...");
+		running_ = false;
+		if(webcam_node){
+			webcam_node->stop();
+		}
 
 		if(webcam_thread.joinable()){
 			webcam_thread.join();
+			std::cout << "Webcam node joined..." << std::endl;
 		}
 
+		if(loop_thread.joinable()){
+			loop_thread.join();
+			std::cout << "Loop thread joined..." << std::endl;
+		}
+
+		for (auto& t : worker_threads) {
+			if (t.joinable()) {
+				t.join();
+				std::cout << "Worker node joined..." << std::endl;
+			}
+		}
+		RCLCPP_WARN(this->get_logger(), "Average FPS boxes: %f", 1 / avg_delay);
+		RCLCPP_WARN(this->get_logger(), "Average FPS loop: %f", 1 / avg_delay_loop);
+	}
+
+	SlaveNode::~SlaveNode(){
+		if(webcam_node){
+			webcam_node->stop();
+		}
+
+		running_ = false;
+		
+		if(webcam_thread.joinable()){
+			webcam_thread.join();
+		}
+	
 		if(loop_thread.joinable()){
 			loop_thread.join();
 		}
@@ -339,7 +407,6 @@ namespace hpe_test {
 				t.join();
 			}
 		}
-		
 	}
 
 	void SlaveNode::calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request, std::shared_ptr<hpe_msgs::srv::Calibration::Response> response){

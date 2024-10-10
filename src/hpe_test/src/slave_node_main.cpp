@@ -7,16 +7,25 @@ int main(int argc, char *argv[]) {
 	}
 	int starting_workers = 3;
 	if(argc == 6){
-		starting_workers = atoi(argv[4]);
+		starting_workers = atoi(argv[5]);
 	}else if(argc > 6){
 		return 1;
 	}
 	rclcpp::init(argc, argv);
-
-	rclcpp::executors::MultiThreadedExecutor executor;
-    auto node = std::make_shared<hpe_test::SlaveNode>(argv[1], argv[2], atoi(argv[3]), atoi(argv[4]), starting_workers);
-    executor.add_node(node);
-    executor.spin();
-	rclcpp::shutdown();
+	try {
+		{
+			rclcpp::executors::MultiThreadedExecutor executor;
+			auto node = std::make_shared<hpe_test::SlaveNode>(argv[1], argv[2], atoi(argv[3]), atoi(argv[4]), starting_workers);
+			executor.add_node(node);
+			executor.spin();
+			node->shutdown();
+			executor.remove_node(node);
+		}
+		rclcpp::shutdown();
+		std::cout << "ROS2 shutdown complete" << std::endl;
+	} catch (const rclcpp::exceptions::RCLError & e) {
+		std::cerr << "Error during shutdown: " << e.what() << std::endl;
+	}
+	
 	return 0;
 }

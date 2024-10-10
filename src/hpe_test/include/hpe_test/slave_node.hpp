@@ -19,13 +19,14 @@
 #include "hpe_test/data.hpp"
 #include "hpe_msgs/srv/calibration.hpp"
 
-
 namespace hpe_test {
 
 	class SlaveNode : public rclcpp::Node {
 		public:
 			SlaveNode(std::string name, std::string raw_topic, int model_, int detection_model_, int starting_workers);
 			~SlaveNode();
+			void shutdown();
+
 
 		private:
 			float computeIoU(const float* box1, const float* box2);
@@ -36,7 +37,7 @@ namespace hpe_test {
 			void open_camera();
 			void findPpl(cv::Mat&, std_msgs::msg::Header);
 			void calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request, std::shared_ptr<hpe_msgs::srv::Calibration::Response> response);
-			void group_outputs();
+			void loop();
 
 			//model numbers (see data.cpp)
 			int detection_model_n = 0; 
@@ -63,14 +64,20 @@ namespace hpe_test {
 			std::thread webcam_thread;
 			std::thread loop_thread;
 			std::queue<std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture>> futures_vector_queue_;
-			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> futures_vector_working_loop_;
-			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> futures_vector_working_callback_;
 			std::mutex queue_mutex_;
+			std::atomic<bool> running_;
 
+			std::shared_ptr<hpe_test::WebcamNode> webcam_node;
 
 			//worker stuff
 			std::vector<std::thread> worker_threads;
 			int workers_n = 0;
+
+			//Metriche fps
+			int delay_window;
+            double avg_delay;
+			int delay_window_loop;
+            double avg_delay_loop;
 
 			//TODO sort this stuff...
 			int input_tensor_idx;

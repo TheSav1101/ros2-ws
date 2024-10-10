@@ -7,7 +7,7 @@ using std::placeholders::_2;
 namespace hpe_test{
 		
 	void WorkerNode::service(const std::shared_ptr<hpe_msgs::srv::Estimate::Request> request, std::shared_ptr<hpe_msgs::srv::Estimate::Response> response) {
-
+		auto start = this->get_clock()->now();
 		try {
 			cv_ptr = cv_bridge::toCvCopy(request->detection.image, sensor_msgs::image_encodings::BGR8);
 		} catch (cv_bridge::Exception &e) {
@@ -18,14 +18,11 @@ namespace hpe_test{
 
 		memcpy(input_data, cv_ptr->image.data, input_size * sizeof(uint8_t));
 
-		auto start = this->get_clock()->now();
-
 		if (interpreter->Invoke() != kTfLiteOk)
 			RCLCPP_ERROR(
 					this->get_logger(),
 					"ERROR: Something went wrong while invoking the interpreter...");
 
-		double delay = (this->get_clock()->now() - start).seconds();
 
 		std::vector<std::vector<float>> out(output_dims->data[3]);
 
@@ -47,12 +44,12 @@ namespace hpe_test{
 		response->hpe2d.joints.confidence = out[2];
 		response->hpe2d.joints.dim = output_dims->data[2];
 		
-
+		double delay = (this->get_clock()->now() - start).seconds();
         avg_delay = (avg_delay*delay_window + delay);
         delay_window++;
         avg_delay /= delay_window;
+		RCLCPP_INFO(this->get_logger(), "Service %d processing completed", delay_window);
 
-		RCLCPP_INFO(this->get_logger(), "Average delay: %f, current delay: %f", avg_delay, delay);
 	}
 
 	void WorkerNode::setupTensors() {
@@ -123,7 +120,7 @@ namespace hpe_test{
 	}
 
 	WorkerNode::~WorkerNode(){
-		//TODO
+		RCLCPP_WARN(this->get_logger(), "Average FPS: %f, total frames: %d", 1/avg_delay, delay_window);
 	}
 };
 
