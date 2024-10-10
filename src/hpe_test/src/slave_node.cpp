@@ -236,7 +236,6 @@ namespace hpe_test {
 			delay_window_loop++;
 			avg_delay_loop /= delay_window_loop;
 
-			RCLCPP_ERROR(this->get_logger(), "One loop");
 			loop_rate.sleep();
         }
 	}
