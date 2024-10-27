@@ -8,6 +8,7 @@ namespace hpe_test{
     MasterNodeSingle::MasterNodeSingle(std::string name) : Node(name){
         avg_delay = 0.0;
 		delay_window = 0;
+        last_marker_count_ = 0;
 
         filtered_feedbacks = {};
         camera_indices = {};
@@ -16,6 +17,7 @@ namespace hpe_test{
         slaves_feedback_ = {};
         scan_for_slaves();
         scanner_ = this->create_wall_timer(std::chrono::seconds(5), std::bind(&MasterNodeSingle::scan_for_slaves, this));
+        marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("visualization_marker_array", 10);
 
         loop_thread = std::thread(&MasterNodeSingle::loop, this);
 		loop_thread.detach();
@@ -47,7 +49,7 @@ namespace hpe_test{
 
     void MasterNodeSingle::loop(){
         running_ = true;
-        rclcpp::Rate loop_rate(30);
+        rclcpp::Rate loop_rate(60);
         while(running_){
             auto start = this->get_clock()->now();
             
@@ -68,25 +70,77 @@ namespace hpe_test{
 
     void MasterNodeSingle::triangulate_all(){
 
-
-
-    }
-
-    Eigen::Vector3f MasterNodeSingle::triangulateWithoutWeights(const std::vector<Eigen::Matrix<float, 2, 3>>& A_list, const std::vector<Eigen::Matrix<float, 2, 1>>& B_list){
-        Eigen::MatrixXf A_combined;
-        Eigen::VectorXf B_combined;
- 
-        for (size_t i = 0; i < A_list.size(); ++i) {
-            A_combined.conservativeResize(A_combined.rows() + 2, 3);
-            A_combined.bottomRows(2) = A_list[i];
-
-            B_combined.conservativeResize(B_combined.rows() + 2, 1);
-            B_combined.bottomRows(2) = B_list[i];
+        if(filtered_feedbacks.size() <= 1){
+            RCLCPP_INFO(this->get_logger(), "No good slave respones yet");
         }
 
-        Eigen::Vector3f X = A_combined.colPivHouseholderQr().solve(B_combined);
+        std::vector<Eigen::Vector3f> joints3d = {};
+        std::vector<float> avg_conf = {};
 
-        return X;
+        for(int i = 0; i < max_joints; i++){
+            std::vector<float> confidences = {};
+            float avg_conf_ = 0.0;
+
+            for(auto f: filtered_feedbacks){
+                confidences.push_back(f.all_joints[0].confidence[i]);
+                avg_conf_ += f.all_joints[0].confidence[i];
+            }
+
+            avg_conf_ /= filtered_feedbacks.size();
+
+            joints3d.push_back(iterateWithWeights(confidences));
+            avg_conf.push_back(avg_conf_);
+        }
+    }
+
+    void MasterNodeSingle::visualize_3d(std::vector<Eigen::Vector3f> &joints, std::vector<float> &avg_conf){
+        visualization_msgs::msg::MarkerArray marker_array;
+        
+        for (size_t i = 0; i < joints.size(); ++i) {
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = "world";
+            marker.header.stamp = this->get_clock()->now();
+            marker.ns = "joints";
+            marker.id = static_cast<int>(i);
+            marker.type = visualization_msgs::msg::Marker::SPHERE;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+            marker.pose.position.x = joints[i].x();
+            marker.pose.position.y = joints[i].y();
+            marker.pose.position.z = joints[i].z();
+            marker.scale.x = 0.05;
+            marker.scale.y = 0.05;
+            marker.scale.z = 0.05;
+
+            std_msgs::msg::ColorRGBA color;
+            color.r = 1.0f - avg_conf[i];
+            color.g = avg_conf[i];
+            color.b = 0.0f;
+            color.a = 1.0f;
+            marker.color = color;
+
+            marker_array.markers.push_back(marker);
+        }
+
+        marker_pub_->publish(marker_array);
+        last_marker_count_ += joints.size();
+    }
+
+    void MasterNodeSingle::clear_markers() {
+        visualization_msgs::msg::MarkerArray marker_array;
+
+        for (size_t i = 0; i < last_marker_count_; ++i) {
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = "world";
+            marker.header.stamp = this->get_clock()->now();
+            marker.ns = "joints";
+            marker.id = static_cast<int>(i);
+            marker.action = visualization_msgs::msg::Marker::DELETE;
+
+            marker_array.markers.push_back(marker);
+        }
+
+        marker_pub_->publish(marker_array);
+        last_marker_count_ = 0;
     }
 
     float MasterNodeSingle::computeWcj(float s_cj, Eigen::Vector3f joint_3d, Eigen::Matrix4f extrinsic_matrix) {
@@ -106,32 +160,29 @@ namespace hpe_test{
         return W_cj;
     }
 
-    Eigen::Vector3f MasterNodeSingle::iterateWithWeights(std::vector<Eigen::Matrix<float, 2, 3>>& A_list, std::vector<Eigen::Matrix<float, 2, 1>>& B_list, const std::vector<float>& confidences) {
+    Eigen::Vector3f MasterNodeSingle::iterateWithWeights(const std::vector<float>& confidences) {
     
-        Eigen::Vector3f X = triangulateWithoutWeights(A_list, B_list);
+        Eigen::Vector3f X = A_.colPivHouseholderQr().solve(B_);
     
         for (int iteration = 0; iteration < max_iterations; iteration++) {
             std::vector<float> weights;
-            for (size_t i = 0; i < A_list.size(); i++) {
+            for (size_t i = 0; i < confidences.size(); i++) {
                 float s_cj = confidences[i];
                 float W_cj = computeWcj(s_cj, X, slaves_calibration_[camera_indices[i]].getExtrinsics());
                 weights.push_back(W_cj);
             }
 
-            Eigen::MatrixXf A_combined;
-            Eigen::VectorXf B_combined;
-            for (size_t i = 0; i < A_list.size(); ++i) {
-                Eigen::Matrix<float, 2, 3> A_weighted = weights[i] * A_list[i];
-                Eigen::Matrix<float, 2, 1> B_weighted = weights[i] * B_list[i];
+            Eigen::MatrixXf A_weighted = A_;
+            Eigen::VectorXf B_weighted = B_;
 
-                A_combined.conservativeResize(A_combined.rows() + 2, 3);
-                A_combined.bottomRows(2) = A_weighted;
-
-                B_combined.conservativeResize(B_combined.rows() + 2, 1);
-                B_combined.bottomRows(2) = B_weighted;
+            for (size_t i = 0; i < weights.size(); i++) {
+                A_weighted.row(2 * i)       *= weights[i];
+                A_weighted.row(2 * i + 1)   *= weights[i];
+                B_weighted.row(2 * i)       *= weights[i];
+                B_weighted.row(2 * i + 1)   *= weights[i];
             }
 
-            X = A_combined.colPivHouseholderQr().solve(B_combined);
+            X = A_weighted.colPivHouseholderQr().solve(B_weighted);
         }
         
         return X;
@@ -204,55 +255,30 @@ namespace hpe_test{
         }
     }
 
-    std::vector<Eigen::Matrix<float, 2, 3>> MasterNodeSingle::buildA_list(int joint_n, std::vector<int> cameras, std::vector<int> skeletons){
-        std::vector<Eigen::Matrix<float, 2, 3>> out = {};
+   void MasterNodeSingle::buildAB_lists(int joint_n){
+        A_ = Eigen::MatrixXf();
+        B_ = Eigen::MatrixXf();
         
-        for(size_t i = 0; i < cameras.size(); i++){
-
-            if((int) filtered_feedbacks.size() <= cameras[i])
-                RCLCPP_ERROR(this->get_logger(), "ERROR, CAMERA INDEX OUT OF BOUNDS");
-            if((int) filtered_feedbacks[cameras[i]].all_joints.size() <= skeletons[i])
-                RCLCPP_ERROR(this->get_logger(), "ERROR, SKELETON INDEX OUT OF BOUNDS");
-            if((int) filtered_feedbacks[cameras[i]].all_joints[skeletons[i]].x.size() <= joint_n)
+        for(size_t i = 0; i < filtered_feedbacks.size(); i++){
+            if((int) filtered_feedbacks[0].all_joints[0].dim <= joint_n)
                 RCLCPP_ERROR(this->get_logger(), "ERROR, JOINT INDEX OUT OF BOUNDS");
 
-
-            float x = filtered_feedbacks[cameras[i]].all_joints[skeletons[i]].x[joint_n];
-            float y = filtered_feedbacks[cameras[i]].all_joints[skeletons[i]].y[joint_n];
+            float x = filtered_feedbacks[i].all_joints[0].x[joint_n];
+            float y = filtered_feedbacks[i].all_joints[0].y[joint_n];
 
             Eigen::Vector2f p = Eigen::Vector2f::Zero();
             p(0) = x;
             p(1) = y;
 
-            out.push_back(slaves_calibration_[camera_indices[cameras[i]]].getARows(p));
+            Eigen::Matrix<float, 2, 3> A_under = slaves_calibration_[camera_indices[i]].getARows(p);
+            Eigen::Matrix<float, 2, 1> B_under = slaves_calibration_[camera_indices[i]].getBRows(p);
+
+            A_.conservativeResize(A_.rows() + 2, 3);
+            A_.bottomRows(2) = A_under;
+
+            B_.conservativeResize(B_.rows() + 2, 1);
+            B_.bottomRows(2) = B_under;
         }
-
-        return out;
-    }
-    std::vector<Eigen::Matrix<float, 2, 1>> MasterNodeSingle::buildB_list(int joint_n, std::vector<int> cameras, std::vector<int> skeletons){
-        std::vector<Eigen::Matrix<float, 2, 1>> out = {};
-
-        for(size_t i = 0; i < cameras.size(); i++){
-
-            if((int) filtered_feedbacks.size() <= cameras[i])
-                RCLCPP_ERROR(this->get_logger(), "ERROR, CAMERA INDEX OUT OF BOUNDS");
-            if((int) filtered_feedbacks[cameras[i]].all_joints.size() <= skeletons[i])
-                RCLCPP_ERROR(this->get_logger(), "ERROR, SKELETON INDEX OUT OF BOUNDS");
-            if((int) filtered_feedbacks[cameras[i]].all_joints[skeletons[i]].x.size() <= joint_n)
-                RCLCPP_ERROR(this->get_logger(), "ERROR, JOINT INDEX OUT OF BOUNDS");
-
-
-            float x = filtered_feedbacks[cameras[i]].all_joints[skeletons[i]].x[joint_n];
-            float y = filtered_feedbacks[cameras[i]].all_joints[skeletons[i]].y[joint_n];
-
-            Eigen::Vector2f p = Eigen::Vector2f::Zero();
-            p(0) = x;
-            p(1) = y;
-
-            out.push_back(slaves_calibration_[camera_indices[cameras[i]]].getBRows(p));
-        }
-        
-        return out;
     }
 
 

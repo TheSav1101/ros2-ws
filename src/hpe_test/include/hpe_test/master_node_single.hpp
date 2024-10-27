@@ -11,7 +11,9 @@
 #include "hpe_msgs/msg/slave.hpp"
 #include "hpe_msgs/srv/calibration.hpp"
 #include <hpe_test/calibration.hpp>
-
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <std_msgs/msg/color_rgba.hpp>
 
 namespace hpe_test {
 
@@ -31,13 +33,20 @@ namespace hpe_test {
 			void triangulate_all();
 			float computeWcj(float s_cj, Eigen::Vector3f joint_3d, Eigen::Matrix4f extrinsic_matrix);
 			
-			Eigen::Vector3f triangulateWithoutWeights(const std::vector<Eigen::Matrix<float, 2, 3>>& A_list, const std::vector<Eigen::Matrix<float, 2, 1>>& B_list);
-			Eigen::Vector3f iterateWithWeights(std::vector<Eigen::Matrix<float, 2, 3>>& A_list, std::vector<Eigen::Matrix<float, 2, 1>>& B_list, const std::vector<float>& confidences);
-			std::vector<Eigen::Matrix<float, 2, 3>> buildA_list(int joint_n, std::vector<int> cameras, std::vector<int> skeletons);
-			std::vector<Eigen::Matrix<float, 2, 1>> buildB_list(int joint_n, std::vector<int> cameras, std::vector<int> skeletons);
+			Eigen::Vector3f triangulateWithoutWeights();
+			Eigen::Vector3f iterateWithWeights(const std::vector<float>& confidences);
+			void buildAB_lists(int joint_n);
+			void visualize_3d(std::vector<Eigen::Vector3f> &joints, std::vector<float>& avg_conf);
+			void clear_markers();
+
+			//Linear algebra matrices
+			Eigen::MatrixXf A_;
+        	Eigen::VectorXf B_;
+
 			//Metrics
 			float avg_delay;
 			int delay_window;
+			size_t last_marker_count_ = 0;
 
 			//Loop stuff
 			std::atomic<bool> running_;
@@ -45,12 +54,14 @@ namespace hpe_test {
 
 			const float MAX_TIME_DIFF = 0.15;
 			const int max_iterations = 3;
+			const int max_joints = 17;
 
 			std::vector<hpe_msgs::msg::Slave> filtered_feedbacks;
             std::vector<int> camera_indices;
 
 			std::vector<rclcpp::Subscription<hpe_msgs::msg::Slave>::SharedPtr> subscribers_ = {};
 			std::set<std::string> subscribed_topics_names_;
+			rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
 
 			std::vector<hpe_msgs::msg::Slave> slaves_feedback_;
 

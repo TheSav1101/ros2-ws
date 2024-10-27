@@ -3,7 +3,7 @@
 int main(int argc, char *argv[]) {
 	std::string name = "master";
 
-	if (!argc < 2) {
+	if (argc >= 2) {
 		name = argv[1];
 	}
 	
