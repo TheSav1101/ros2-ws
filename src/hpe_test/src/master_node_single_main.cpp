@@ -1,4 +1,4 @@
-#include <hpe_test/master_node.hpp>
+#include <hpe_test/master_node_single.hpp>
 
 int main(int argc, char *argv[]) {
 	std::string name = "master";
@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
 	try {
 		{
 			rclcpp::executors::MultiThreadedExecutor executor;
-			auto node = std::make_shared<hpe_test::MasterNode>(name);
+			auto node = std::make_shared<hpe_test::MasterNodeSingle>(name);
 			executor.add_node(node);
 			executor.spin();
 			node->shutdown();

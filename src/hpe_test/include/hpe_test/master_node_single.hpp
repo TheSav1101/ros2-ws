@@ -1,5 +1,5 @@
-#ifndef HPE_TEST__MASTER_NODE_HPP_
-#define HPE_TEST__MASTER_NODE_HPP_
+#ifndef HPE_TEST__MASTER_NODE_SINGLE_HPP_
+#define HPE_TEST__MASTER_NODE_SINGLE_HPP_
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -15,10 +15,10 @@
 
 namespace hpe_test {
 
-	class MasterNode : public rclcpp::Node {
+	class MasterNodeSingle : public rclcpp::Node {
 		public:
-			MasterNode(std::string name);
-			~MasterNode();
+			MasterNodeSingle(std::string name);
+			~MasterNodeSingle();
 			void shutdown();
 
 		private:

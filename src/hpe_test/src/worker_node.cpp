@@ -38,6 +38,8 @@ namespace hpe_test{
 			out[1][i] = (out[1][i]*(float)request->detection.box.width  + (float)request->detection.box.x)/(float)request->detection.box.img_width;
 		}
 
+		response->hpe2d = hpe_msgs::msg::Hpe2d();
+
 		response->hpe2d.header = request->detection.image.header;
 		response->hpe2d.joints.y = out[0];
 		response->hpe2d.joints.x = out[1];

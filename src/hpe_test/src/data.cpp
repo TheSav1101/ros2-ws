@@ -6,3 +6,5 @@ const std::vector<int>          MODEL_HEIGHT            = {192, 256};
 const std::vector<std::string>  DETECTION_MODEL_FILES   = {"./src/hpe_test/detector_models/yolov4-tiny-416.tflite"};
 const std::vector<int>          DETECTION_MODEL_WIDTH   = {416};
 const std::vector<int>          DETECTION_MODEL_HEIGHT  = {416};
+const double                    MIN_SKELETON_CONFIDENCE = 0.5;
+const double                    MIN_BOX_CONFIDENCE      = 0.8;
