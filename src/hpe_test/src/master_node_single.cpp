@@ -91,6 +91,8 @@ namespace hpe_test{
             joints3d.push_back(iterateWithWeights(confidences));
             avg_conf.push_back(avg_conf_);
         }
+        clear_markers();
+        visualize_3d(joints3d, avg_conf);
     }
 
     void MasterNodeSingle::visualize_3d(std::vector<Eigen::Vector3f> &joints, std::vector<float> &avg_conf){
