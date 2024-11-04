@@ -19,6 +19,7 @@ namespace hpe_test{
         float qw = calibration_msg.frame.transform.rotation.w;
 
         tf2::Quaternion quaternion(qx, qy, qz, qw);
+        quaternion.normalize();
         tf2::Matrix3x3 rotation_matrix(quaternion);
 
         for (int i = 0; i < 3; ++i) {
@@ -30,11 +31,13 @@ namespace hpe_test{
         //Fine extrinsics
 
         Eigen::Matrix3f partial_intrinsics = Eigen::Matrix3f::Identity();
-        for (int row = 0; row < partial_intrinsics.rows(); ++row) {
-            for (int col = 0; col < partial_intrinsics.cols(); ++col) {
-                partial_intrinsics(row, col) = calibration_msg.intrinsic_params.camera_matrix[row * intrinsics_.cols() + col];
+        for (int col = 0; col < partial_intrinsics.cols(); ++col){
+            for (int row = 0; row < partial_intrinsics.rows(); ++row){
+                partial_intrinsics(row, col) = calibration_msg.intrinsic_params.camera_matrix[col * partial_intrinsics.rows() + row];
             }
         }
+
+        std::cout << "Intrinsic matrix:\n" << partial_intrinsics << std::endl;
 
         intrinsics_ = Eigen::Matrix<float, 3, 4>::Zero();
         intrinsics_.block<3,3>(0,0) = partial_intrinsics;
@@ -43,6 +46,9 @@ namespace hpe_test{
 
         Eigen::Matrix4f extrinsics_inv = extrinsics_.inverse();
         projection_ = intrinsics_*extrinsics_inv;
+
+
+        std::cout << "Projection matrix:\n" << projection_ << std::endl;
     }
 
     Calibration::~Calibration(){

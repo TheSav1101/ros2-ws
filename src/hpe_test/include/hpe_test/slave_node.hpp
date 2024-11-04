@@ -3,6 +3,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <opencv4/opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.hpp>
@@ -20,6 +21,8 @@
 #include "hpe_msgs/srv/calibration.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 
@@ -27,7 +30,7 @@ namespace hpe_test {
 
 	class SlaveNode : public rclcpp::Node {
 		public:
-			SlaveNode(std::string name, std::string raw_topic, int model_, int detection_model_, int starting_workers);
+			SlaveNode(std::string name, std::string raw_topic, int model_, int detection_model_, int starting_workers, std::string calibration_topic);
 			~SlaveNode();
 			void shutdown();
 
@@ -37,6 +40,7 @@ namespace hpe_test {
 			std::vector<size_t> nonMaxSuppression(float* boxes, float* scores, size_t numBoxes, float iouThreshold, float minConfidence);
 			void create_new_worker();
 			void setupTensors();
+			void saveCameraInfo(const sensor_msgs::msg::CameraInfo &msg);
 			void callback(const sensor_msgs::msg::Image &msg);
 			void open_camera();
 			void findPpl(cv::Mat&, std_msgs::msg::Header);
@@ -47,6 +51,15 @@ namespace hpe_test {
 			int detection_model_n = 0; 
 			int hpe_model_n = 0;
 
+			//Flag for calibration options
+			std::atomic<bool> calibration_from_json;
+
+			//transform stuff
+			tf2_ros::Buffer tf_buffer;
+			tf2_ros::TransformListener tf_listener;
+
+			sensor_msgs::msg::CameraInfo camera_info;
+
 			//publishers
 			rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_boxes_;
 			rclcpp::Publisher<hpe_msgs::msg::Slave>::SharedPtr publisher_slave_;
@@ -55,6 +68,7 @@ namespace hpe_test {
 			
 			//subscriber
 			rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
+			rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr subscription_info_;
 
 			//tflite poiners
 			std::unique_ptr<tflite::FlatBufferModel> model;

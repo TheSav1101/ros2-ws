@@ -52,7 +52,7 @@ namespace hpe_test {
 			std::atomic<bool> running_;
 			std::thread loop_thread;
 
-			const float MAX_TIME_DIFF = 0.15;
+			const float MAX_TIME_DIFF = 0.25;
 			const int max_iterations = 3;
 			const int max_joints = 17;
 

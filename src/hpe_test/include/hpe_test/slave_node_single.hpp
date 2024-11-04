@@ -3,6 +3,8 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/compressed_image.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <opencv4/opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.hpp>
@@ -21,12 +23,14 @@
 #include <fstream>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 namespace hpe_test {
 
 	class SlaveNodeSingle : public rclcpp::Node {
 		public:
-			SlaveNodeSingle(std::string name, std::string raw_topic, int model_);
+			SlaveNodeSingle(std::string name, std::string raw_topic, int model_, std::string calibration_topic);
 			~SlaveNodeSingle();
 			void shutdown();
 
@@ -34,6 +38,8 @@ namespace hpe_test {
 		private:
 			void setupTensors();
 			void callback(const sensor_msgs::msg::Image &msg);
+			void saveCameraInfo(const sensor_msgs::msg::CameraInfo &msg);
+			void compressedCallback(const sensor_msgs::msg::CompressedImage &msg);
 			void calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request [[maybe_unused]], std::shared_ptr<hpe_msgs::srv::Calibration::Response> response);
 
 			//model numbers (see data.cpp)
@@ -46,6 +52,19 @@ namespace hpe_test {
 			
 			//subscriber
 			rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
+			rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr subscription_info_;
+
+			//Read from some bags...
+			rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_sub_;
+
+			//Flag for calibration options
+			std::atomic<bool> calibration_from_json;
+
+			sensor_msgs::msg::CameraInfo camera_info;
+
+			//transform stuff
+			tf2_ros::Buffer tf_buffer;
+			tf2_ros::TransformListener tf_listener;
 
 			//tflite poiners
 			std::unique_ptr<tflite::FlatBufferModel> model;

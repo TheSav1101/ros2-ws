@@ -308,9 +308,11 @@ namespace hpe_test {
 		findPpl(cv_ptr->image, msg.header);
 	}
 
-	
+	void SlaveNode::saveCameraInfo(const sensor_msgs::msg::CameraInfo &msg){
+		camera_info = msg;
+	}
 
-	SlaveNode::SlaveNode(std::string name, std::string raw_topic, int hpe_model_n_, int detection_model_n_, int starting_workers) : Node(name) {
+	SlaveNode::SlaveNode(std::string name, std::string raw_topic, int hpe_model_n_, int detection_model_n_, int starting_workers, std::string calibration_topic) : Node(name), tf_buffer(this->get_clock()), tf_listener(tf_buffer) {
 		node_name = name;
 		
 		avg_delay = 0.0;
@@ -322,6 +324,11 @@ namespace hpe_test {
 
 		hpe_model_n = hpe_model_n_;
 		detection_model_n = detection_model_n_;
+
+		calibration_from_json = calibration_topic.size() <= 0;
+
+		if(!calibration_from_json)
+			subscription_info_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(calibration_topic, 10, std::bind(&SlaveNode::saveCameraInfo, this, _1));	
 
 		if(hpe_model_n < 0 || (size_t) hpe_model_n > MODEL_FILES.size()){
 			RCLCPP_ERROR(this->get_logger(), "NOT A GOOD HPE MODEL NUMBER. MUST BE BETWEEN 0 AND %ld", MODEL_FILES.size() - 1);
@@ -409,70 +416,98 @@ namespace hpe_test {
 
 	void SlaveNode::calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request [[maybe_unused]], std::shared_ptr<hpe_msgs::srv::Calibration::Response> response){
 
-		std::ifstream file("camera_config.json");
-		if (!file.is_open()) {
-			RCLCPP_ERROR(this->get_logger(), "FAILED TO OPEN CONFIGURATION FILE!");
-			return;
+		if(calibration_from_json){
+
+			std::ifstream file("./calibration/calibration_" + node_name + ".json");
+			if (!file.is_open()) {
+				RCLCPP_ERROR(this->get_logger(), "FAILED TO OPEN CONFIGURATION FILE!");
+				return;
+			}
+
+			nlohmann::json json_data;
+			file >> json_data;
+
+			auto intrinsic_json = json_data["camera"]["intrinsic"];
+
+			std::vector<double> intrinsic(9);
+			intrinsic[0] = intrinsic_json[0][0];  // fx
+			intrinsic[1] = intrinsic_json[1][0];  // 0
+			intrinsic[2] = intrinsic_json[2][0];  // 0
+
+			intrinsic[3] = intrinsic_json[0][1];  // 0
+			intrinsic[4] = intrinsic_json[1][1];  // fy
+			intrinsic[5] = intrinsic_json[2][1];  // 0
+
+			intrinsic[6] = intrinsic_json[0][2];  // cx
+			intrinsic[7] = intrinsic_json[1][2];  // cy
+			intrinsic[8] = intrinsic_json[2][2];  // 1
+
+			hpe_msgs::msg::IntrinsicParams intr_prms = hpe_msgs::msg::IntrinsicParams();
+			intr_prms.camera_matrix = intrinsic;
+
+			auto distortion_json = json_data["camera"]["distortion"];
+			std::vector<double> distortion(5);
+
+			for(int i = 0; i < 5; i++)
+				distortion[i] = distortion_json[i];
+
+			intr_prms.distortion_coefficients = distortion;
+
+			response->calibration.intrinsic_params = intr_prms;
+			
+			auto extrinsic_json = json_data["camera"]["extrinsic"];
+			geometry_msgs::msg::TransformStamped transform_msg;
+			
+			transform_msg.transform.translation.x = extrinsic_json[0][3];  // t1
+			transform_msg.transform.translation.y = extrinsic_json[1][3];  // t2
+			transform_msg.transform.translation.z = extrinsic_json[2][3];  // t3
+
+			// Convert the rotation matrix (top-left 3x3) to a quaternion
+			tf2::Matrix3x3 rotation_matrix(
+				extrinsic_json[0][0], extrinsic_json[0][1], extrinsic_json[0][2],
+				extrinsic_json[1][0], extrinsic_json[1][1], extrinsic_json[1][2],
+				extrinsic_json[2][0], extrinsic_json[2][1], extrinsic_json[2][2]
+			);
+
+			tf2::Quaternion quaternion;
+			rotation_matrix.getRotation(quaternion);
+
+			transform_msg.transform.rotation.x = quaternion.x();
+			transform_msg.transform.rotation.y = quaternion.y();
+			transform_msg.transform.rotation.z = quaternion.z();
+			transform_msg.transform.rotation.w = quaternion.w();
+
+			transform_msg.header.frame_id = node_name;
+			transform_msg.header.stamp = this->get_clock()->now();
+			transform_msg.child_frame_id = "world";
+
+			response->calibration.frame = transform_msg;
+		} else {
+
+					
+
+			hpe_msgs::msg::IntrinsicParams intr_prms = hpe_msgs::msg::IntrinsicParams();
+			std::string frame_id = camera_info.header.frame_id;
+
+			std::vector<double> distortion(5);
+			std::vector<double> k(9);
+
+			for(size_t i = 0; i < 5 || i < camera_info.d.size(); i ++){
+				distortion[i] = camera_info.d[i];
+			}
+
+			for(size_t i = 0; i < 9; i ++){
+				k[i] = camera_info.k[i];
+			}
+
+			intr_prms.distortion_coefficients = distortion;
+			intr_prms.camera_matrix = k;
+			
+			response ->calibration.frame = tf_buffer.lookupTransform("world", frame_id, tf2::TimePointZero);
+			response->calibration.intrinsic_params = intr_prms;
+
 		}
 
-		nlohmann::json json_data;
-		file >> json_data;
 
-		auto intrinsic_json = json_data["camera"]["intrinsic"];
-
-		std::vector<double> intrinsic(9);
-		intrinsic[0] = intrinsic_json[0][0];  // fx
-		intrinsic[1] = intrinsic_json[1][0];  // 0
-		intrinsic[2] = intrinsic_json[2][0];  // 0
-
-		intrinsic[3] = intrinsic_json[0][1];  // 0
-		intrinsic[4] = intrinsic_json[1][1];  // fy
-		intrinsic[5] = intrinsic_json[2][1];  // 0
-
-		intrinsic[6] = intrinsic_json[0][2];  // cx
-		intrinsic[7] = intrinsic_json[1][2];  // cy
-		intrinsic[8] = intrinsic_json[2][2];  // 1
-
-		hpe_msgs::msg::IntrinsicParams intr_prms = hpe_msgs::msg::IntrinsicParams();
-		intr_prms.camera_matrix = intrinsic;
-
-		auto distortion_json = json_data["camera"]["distortion"];
-		std::vector<double> distortion(5);
-
-		for(int i = 0; i < 5; i++)
-			distortion[i] = distortion_json[i];
-
-		intr_prms.distortion_coefficients = distortion;
-
-		response->calibration.intrinsic_params = intr_prms;
-		
-		auto extrinsic_json = json_data["camera"]["extrinsic"];
-		geometry_msgs::msg::TransformStamped transform_msg;
-		
-		transform_msg.transform.translation.x = extrinsic_json[0][3];  // t1
-		transform_msg.transform.translation.y = extrinsic_json[1][3];  // t2
-		transform_msg.transform.translation.z = extrinsic_json[2][3];  // t3
-
-		// Convert the rotation matrix (top-left 3x3) to a quaternion
-		tf2::Matrix3x3 rotation_matrix(
-			extrinsic_json[0][0], extrinsic_json[0][1], extrinsic_json[0][2],
-			extrinsic_json[1][0], extrinsic_json[1][1], extrinsic_json[1][2],
-			extrinsic_json[2][0], extrinsic_json[2][1], extrinsic_json[2][2]
-		);
-
-		tf2::Quaternion quaternion;
-    	rotation_matrix.getRotation(quaternion);
-
-		transform_msg.transform.rotation.x = quaternion.x();
-		transform_msg.transform.rotation.y = quaternion.y();
-		transform_msg.transform.rotation.z = quaternion.z();
-		transform_msg.transform.rotation.w = quaternion.w();
-
-		transform_msg.header.frame_id = node_name;
-		transform_msg.header.stamp = this->get_clock()->now();
-		transform_msg.child_frame_id = "world";
-
-		response->calibration.frame = transform_msg;
 	}
-
 };

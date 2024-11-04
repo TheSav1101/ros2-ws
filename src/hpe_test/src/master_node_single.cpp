@@ -17,7 +17,7 @@ namespace hpe_test{
         slaves_feedback_ = {};
         scan_for_slaves();
         scanner_ = this->create_wall_timer(std::chrono::seconds(5), std::bind(&MasterNodeSingle::scan_for_slaves, this));
-        marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("visualization_marker_array", 10);
+        marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("master_node_output", 10);
 
         loop_thread = std::thread(&MasterNodeSingle::loop, this);
 		loop_thread.detach();
@@ -40,11 +40,12 @@ namespace hpe_test{
 			loop_thread.join();
 			RCLCPP_INFO(this->get_logger(), "Loop thread joined...");
 		}
+        RCLCPP_WARN(this->get_logger(), "Average FPS loop: %f", 1 / avg_delay);
     }
 
     void MasterNodeSingle::callback(const hpe_msgs::msg::Slave &msg, int index, std::string topic){
         slaves_feedback_[index] = msg;
-        RCLCPP_INFO(this->get_logger(), "Recived from %s", topic.c_str());
+        //RCLCPP_INFO(this->get_logger(), "Recived from %s", topic.c_str());
     }
 
     void MasterNodeSingle::loop(){
@@ -71,7 +72,8 @@ namespace hpe_test{
     void MasterNodeSingle::triangulate_all(){
 
         if(filtered_feedbacks.size() <= 1){
-            RCLCPP_INFO(this->get_logger(), "No good slave respones yet");
+            RCLCPP_WARN(this->get_logger(), "No good slave respones yet");
+            return;
         }
 
         std::vector<Eigen::Vector3f> joints3d = {};
@@ -88,15 +90,23 @@ namespace hpe_test{
 
             avg_conf_ /= filtered_feedbacks.size();
 
+            buildAB_lists(i);
+            
             joints3d.push_back(iterateWithWeights(confidences));
+            
             avg_conf.push_back(avg_conf_);
         }
+
+        
+
         clear_markers();
         visualize_3d(joints3d, avg_conf);
     }
 
     void MasterNodeSingle::visualize_3d(std::vector<Eigen::Vector3f> &joints, std::vector<float> &avg_conf){
         visualization_msgs::msg::MarkerArray marker_array;
+
+        //RCLCPP_WARN(this->get_logger(), "---------------------------");
         
         for (size_t i = 0; i < joints.size(); ++i) {
             visualization_msgs::msg::Marker marker;
@@ -121,10 +131,15 @@ namespace hpe_test{
             marker.color = color;
 
             marker_array.markers.push_back(marker);
+            //RCLCPP_INFO(this->get_logger(), "Joint %ld: x=%f, y=%f, z=%f", i, joints[i].x(), joints[i].y(),joints[i].z());
+
         }
+
+        //RCLCPP_WARN(this->get_logger(), "---------------------------");
 
         marker_pub_->publish(marker_array);
         last_marker_count_ += joints.size();
+        //RCLCPP_INFO(this->get_logger(), "Added %ld markers", last_marker_count_);
     }
 
     void MasterNodeSingle::clear_markers() {
@@ -257,31 +272,36 @@ namespace hpe_test{
         }
     }
 
-   void MasterNodeSingle::buildAB_lists(int joint_n){
-        A_ = Eigen::MatrixXf();
-        B_ = Eigen::MatrixXf();
-        
-        for(size_t i = 0; i < filtered_feedbacks.size(); i++){
-            if((int) filtered_feedbacks[0].all_joints[0].dim <= joint_n)
-                RCLCPP_ERROR(this->get_logger(), "ERROR, JOINT INDEX OUT OF BOUNDS");
+void MasterNodeSingle::buildAB_lists(int joint_n) {
 
-            float x = filtered_feedbacks[i].all_joints[0].x[joint_n];
-            float y = filtered_feedbacks[i].all_joints[0].y[joint_n];
+    int num_rows = filtered_feedbacks.size() * 2;
 
-            Eigen::Vector2f p = Eigen::Vector2f::Zero();
-            p(0) = x;
-            p(1) = y;
+    A_.resize(num_rows, 3);
+    B_.resize(num_rows, 1);
 
-            Eigen::Matrix<float, 2, 3> A_under = slaves_calibration_[camera_indices[i]].getARows(p);
-            Eigen::Matrix<float, 2, 1> B_under = slaves_calibration_[camera_indices[i]].getBRows(p);
+    int row_offset = 0;
 
-            A_.conservativeResize(A_.rows() + 2, 3);
-            A_.bottomRows(2) = A_under;
-
-            B_.conservativeResize(B_.rows() + 2, 1);
-            B_.bottomRows(2) = B_under;
+    for (size_t i = 0; i < filtered_feedbacks.size(); i++) {
+        if ((int) filtered_feedbacks[0].all_joints[0].dim <= joint_n) {
+            RCLCPP_ERROR(this->get_logger(), "ERROR, JOINT INDEX OUT OF BOUNDS");
         }
+
+        float x = filtered_feedbacks[i].all_joints[0].x[joint_n];
+        float y = filtered_feedbacks[i].all_joints[0].y[joint_n];
+
+        Eigen::Vector2f p = Eigen::Vector2f::Zero();
+        p(0) = x;
+        p(1) = y;
+
+        Eigen::Matrix<float, 2, 3> A_under = slaves_calibration_[camera_indices[i]].getARows(p);
+        Eigen::Matrix<float, 2, 1> B_under = slaves_calibration_[camera_indices[i]].getBRows(p);
+
+        A_.block(row_offset, 0, 2, 3) = A_under;
+        B_.block(row_offset, 0, 2, 1) = B_under;
+
+        row_offset += 2;
     }
+}
 
 
 };
