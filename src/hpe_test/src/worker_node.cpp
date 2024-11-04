@@ -50,12 +50,12 @@ namespace hpe_test{
         avg_delay = (avg_delay*delay_window + delay);
         delay_window++;
         avg_delay /= delay_window;
-		RCLCPP_INFO(this->get_logger(), "Service %d processing completed", delay_window);
+		//RCLCPP_INFO(this->get_logger(), "Service %d processing completed", delay_window);
 
 	}
 
 	void WorkerNode::setupTensors() {
-		RCLCPP_INFO(this->get_logger(), "Building FlatBufferModel...");
+		//RCLCPP_INFO(this->get_logger(), "Building FlatBufferModel...");
 		model = tflite::FlatBufferModel::BuildFromFile(MODEL_FILES[hpe_model_n].c_str());
 		if (!model) {
 			RCLCPP_ERROR(this->get_logger(),"ERROR: Failed to load model from file: %s", MODEL_FILES[hpe_model_n].c_str());
@@ -64,12 +64,10 @@ namespace hpe_test{
 
 		tflite::ops::builtin::BuiltinOpResolver resolver;
 		tflite::InterpreterBuilder builder(*model, resolver);
-		RCLCPP_INFO(this->get_logger(), "Building interpreter...");
+		//RCLCPP_INFO(this->get_logger(), "Building interpreter...");
 		builder(&interpreter);
 		if (!interpreter) {
-			RCLCPP_ERROR(this->get_logger(),
-										"ERROR: could not create interpreter...");
-
+			RCLCPP_ERROR(this->get_logger(),"ERROR: could not create interpreter...");
 			return;
 		}
 
@@ -78,7 +76,7 @@ namespace hpe_test{
 			RCLCPP_ERROR(this->get_logger(), "ERROR ALLOCATING TENSORS!");
 		}
 
-		RCLCPP_INFO(this->get_logger(), "Setting up dimensions...");
+		//RCLCPP_INFO(this->get_logger(), "Setting up dimensions...");
 		// interpreter->SetNumThreads(4);
 		input_tensor_idx = interpreter->inputs()[0];
 		output_tensor_idx = interpreter->outputs()[0];
@@ -90,21 +88,21 @@ namespace hpe_test{
 		int num_inputs = interpreter->inputs().size();
     	for (int i = 0; i < num_inputs; ++i) {
         	const TfLiteTensor* input_tensor = interpreter->tensor(interpreter->inputs()[i]);
-        	RCLCPP_INFO(this->get_logger(), "Input Tensor %d: Type=%d", i, input_tensor->type);
-        	RCLCPP_INFO(this->get_logger(), "Input Tensor %d Dimensions: ", i);
+        	//RCLCPP_INFO(this->get_logger(), "Input Tensor %d: Type=%d", i, input_tensor->type);
+        	//RCLCPP_INFO(this->get_logger(), "Input Tensor %d Dimensions: ", i);
 			for (int j = 0; j < input_tensor->dims->size; ++j) {
 				input_size *= input_tensor->dims->data[j];
-				RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j, input_tensor->dims->data[j]);
+				//RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j, input_tensor->dims->data[j]);
 			}
 		}
 
 		int num_outputs = interpreter->outputs().size();
 		for (int i = 0; i < num_outputs; ++i) {
 			const TfLiteTensor* output_tensor = interpreter->tensor(interpreter->outputs()[i]);
-			RCLCPP_INFO(this->get_logger(), "Output Tensor %d: Type=%d", i, output_tensor->type);
-			RCLCPP_INFO(this->get_logger(), "Output Tensor %d Dimensions: ", i);
+			//RCLCPP_INFO(this->get_logger(), "Output Tensor %d: Type=%d", i, output_tensor->type);
+			//RCLCPP_INFO(this->get_logger(), "Output Tensor %d Dimensions: ", i);
 			for (int j = 0; j < output_tensor->dims->size; ++j) {
-				RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j, output_tensor->dims->data[j]);
+				//RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j, output_tensor->dims->data[j]);
 			}
 		}
 

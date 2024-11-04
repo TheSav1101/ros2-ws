@@ -188,7 +188,7 @@ namespace hpe_test {
 				RCLCPP_ERROR(this->get_logger(), "%s not found", raw_topic.c_str());
 			
 		} else {
-			RCLCPP_INFO(this->get_logger(), "Realsense camera not found, using webcam...");
+			RCLCPP_INFO(this->get_logger(), "Using webcam...");
 			webcam_thread = std::thread([name, this]() {
 				webcam_node = std::make_shared<hpe_test::WebcamNode>(name);
 				rclcpp::spin(webcam_node);

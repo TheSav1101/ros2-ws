@@ -72,142 +72,167 @@ namespace hpe_test {
 		}));
 	}
 
-  	void SlaveNode::findPpl(cv::Mat &img, std_msgs::msg::Header header) {
-		auto start = this->get_clock()->now();
-		cv::resize(img, small, cv::Size(DETECTION_MODEL_WIDTH[detection_model_n], DETECTION_MODEL_HEIGHT[detection_model_n]), cv::INTER_LINEAR);
+  	void SlaveNode::findPpl() {
+		running_ = true;
+		cv::Mat img;
+		std_msgs::msg::Header header;
+		rclcpp::Rate loop_rate(30); 
+		while(rclcpp::ok() && running_){
+			
+			auto start = this->get_clock()->now();
 
-		// TODO togliere sta roba
-		cv::Mat floatImg;
-		small.convertTo(floatImg, CV_32FC3, 1.0/255.0);
-	
-		memcpy(input_data, floatImg.data, input_size * sizeof(float));
+			{
+				std::lock_guard<std::mutex> lock(msg_to_process_mutex_);
+				if(msg_to_process_ptr == nullptr)
+					continue;
 
-		if (!interpreter) {
-			RCLCPP_ERROR(this->get_logger(), "ERROR: Interpreter not initialized");
-			return;
-		}
-		if (interpreter->Invoke() != kTfLiteOk){
-			RCLCPP_ERROR( this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
-			return;
-		}
-		float* boxes = interpreter->typed_output_tensor<float>(0);
-		float* confidence = interpreter->typed_output_tensor<float>(1);
-
-	
-		std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.4, 0.65);
-		//RCLCPP_INFO(this->get_logger(), "Found %ld people", filtered_indices.size());
-
-		cv::Mat boxes_img = img.clone();
-
-		float scaleX = (float) img.cols / (float) DETECTION_MODEL_WIDTH[detection_model_n];
-		float scaleY = (float) img.rows / (float) DETECTION_MODEL_HEIGHT[detection_model_n];
-
-		size_t clients_index = 0;
-
-		std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> current_futures = {};
-
-		for(size_t i: filtered_indices){
-
-			float x1 = boxes[4 * i]     - boxes[4 * i + 2]/2.0;
-			float y1 = boxes[4 * i + 1] - boxes[4 * i + 3]/2.0;
-			float x2 = boxes[4 * i]     + boxes[4 * i + 2]/2.0;
-			float y2 = boxes[4 * i + 1] + boxes[4 * i + 3]/2.0;
-
-			cv::rectangle(boxes_img, cv::Point(static_cast<int>(x1 * scaleX), static_cast<int>(y1 * scaleY)), 
-				cv::Point(static_cast<int>(x2 * scaleX), static_cast<int>(y2 * scaleY)),
-				cv::Scalar(0, 255, 0), 2);
-
-			cv::Rect box(x1*scaleX, y1*scaleY, (int)(boxes[4 * i + 2] * scaleX), (int)(boxes[4 * i + 3] * scaleY));
-
-			box.x = std::max(0, box.x);
-			box.y = std::max(0, box.y);
-			box.width = std::min(box.width, img.cols - box.x);
-			box.height = std::min(box.height, img.rows - box.y);
-
-			cv::Mat crop = img(box);
-			cv::resize(crop, small, cv::Size(MODEL_WIDTH[hpe_model_n], MODEL_HEIGHT[hpe_model_n]), cv::INTER_LINEAR);
-			cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, small);
-			cv_image_msg_bridge.toImageMsg(small_msg);
-
-			auto det_msg = hpe_msgs::msg::Detection();
-			auto box_msg = hpe_msgs::msg::Box();
-			auto request = std::make_shared<hpe_msgs::srv::Estimate::Request>();
-
-
-			box_msg.x 			= box.x;
-			box_msg.y 			= box.y;
-			box_msg.width 		= box.width;
-			box_msg.height 		= box.height;
-			box_msg.img_width 	= img.cols;
-			box_msg.img_height 	= img.rows;
-
-			det_msg.image 		= small_msg;
-			det_msg.box 		= box_msg;
-
-			request->detection 	= det_msg;
-
-
-			if (clients_index >= clients_.size()) {
-				RCLCPP_WARN(this->get_logger(), "worker_%s_%ld was not created yet, i will create a new one...", node_name.c_str(), clients_index);
-    			(void) std::async(std::launch::async, &SlaveNode::create_new_worker, this);
-			}else{
-				if(clients_[clients_index]->wait_for_service(std::chrono::seconds(0))){
-					current_futures.push_back(clients_[clients_index]->async_send_request(request).share());
-				}else{
-					RCLCPP_WARN(this->get_logger(), "worker_%s_%ld, is not ready yet...", node_name.c_str(), clients_index);
+				try {
+					cv_ptr = cv_bridge::toCvCopy(*msg_to_process_ptr, sensor_msgs::image_encodings::BGR8);
+				} catch (cv_bridge::Exception &e) {
+					RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
 				}
-			}
-			clients_index++;
-		}
 
-		if(current_futures.size() > 0)
-		{
-			std::lock_guard<std::mutex> lock(queue_mutex_);
-			futures_vector_queue_.push(current_futures);
-		}
+				img = cv_ptr->image; 
+				header = msg_to_process_ptr->header;
+
+				msg_to_process_ptr.reset();
+			}
+
+			cv::resize(img, small, cv::Size(DETECTION_MODEL_WIDTH[detection_model_n], DETECTION_MODEL_HEIGHT[detection_model_n]), cv::INTER_LINEAR);
+
+			// TODO togliere sta roba
+			cv::Mat floatImg;
+			small.convertTo(floatImg, CV_32FC3, 1.0/255.0);
 		
-		cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, boxes_img);
-		cv_image_msg_bridge.toImageMsg(small_msg);
-		publisher_boxes_->publish(small_msg);
-		double delay = (this->get_clock()->now() - start).seconds();
-        avg_delay = (avg_delay*delay_window + delay);
-        delay_window++;
-        avg_delay /= delay_window;
+			memcpy(input_data, floatImg.data, input_size * sizeof(float));
+
+			if (!interpreter) {
+				RCLCPP_ERROR(this->get_logger(), "ERROR: Interpreter not initialized");
+				return;
+			}
+			if (interpreter->Invoke() != kTfLiteOk){
+				RCLCPP_ERROR( this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
+				return;
+			}
+			float* boxes = interpreter->typed_output_tensor<float>(0);
+			float* confidence = interpreter->typed_output_tensor<float>(1);
+
+		
+			std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.4, 0.65);
+			//RCLCPP_INFO(this->get_logger(), "Found %ld people", filtered_indices.size());
+
+			cv::Mat boxes_img = img.clone();
+
+			float scaleX = (float) img.cols / (float) DETECTION_MODEL_WIDTH[detection_model_n];
+			float scaleY = (float) img.rows / (float) DETECTION_MODEL_HEIGHT[detection_model_n];
+
+			size_t clients_index = 0;
+
+			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> current_futures = {};
+
+			for(size_t i: filtered_indices){
+
+				float x1 = boxes[4 * i]     - boxes[4 * i + 2]/2.0;
+				float y1 = boxes[4 * i + 1] - boxes[4 * i + 3]/2.0;
+				float x2 = boxes[4 * i]     + boxes[4 * i + 2]/2.0;
+				float y2 = boxes[4 * i + 1] + boxes[4 * i + 3]/2.0;
+
+				cv::rectangle(boxes_img, cv::Point(static_cast<int>(x1 * scaleX), static_cast<int>(y1 * scaleY)), 
+					cv::Point(static_cast<int>(x2 * scaleX), static_cast<int>(y2 * scaleY)),
+					cv::Scalar(0, 255, 0), 2);
+
+				cv::Rect box(x1*scaleX, y1*scaleY, (int)(boxes[4 * i + 2] * scaleX), (int)(boxes[4 * i + 3] * scaleY));
+
+				box.x = std::max(0, box.x);
+				box.y = std::max(0, box.y);
+				box.width = std::min(box.width, img.cols - box.x);
+				box.height = std::min(box.height, img.rows - box.y);
+
+				cv::Mat crop = img(box);
+				cv::resize(crop, small, cv::Size(MODEL_WIDTH[hpe_model_n], MODEL_HEIGHT[hpe_model_n]), cv::INTER_LINEAR);
+				cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, small);
+				cv_image_msg_bridge.toImageMsg(small_msg);
+
+				auto det_msg = hpe_msgs::msg::Detection();
+				auto box_msg = hpe_msgs::msg::Box();
+				auto request = std::make_shared<hpe_msgs::srv::Estimate::Request>();
+
+
+				box_msg.x 			= box.x;
+				box_msg.y 			= box.y;
+				box_msg.width 		= box.width;
+				box_msg.height 		= box.height;
+				box_msg.img_width 	= img.cols;
+				box_msg.img_height 	= img.rows;
+
+				det_msg.image 		= small_msg;
+				det_msg.box 		= box_msg;
+
+				request->detection 	= det_msg;
+
+
+				if (clients_index >= clients_.size()) {
+					RCLCPP_WARN(this->get_logger(), "worker_%s_%ld was not created yet, i will create a new one...", node_name.c_str(), clients_index);
+					(void) std::async(std::launch::async, &SlaveNode::create_new_worker, this);
+				}else{
+					if(clients_[clients_index]->wait_for_service(std::chrono::seconds(0))){
+						current_futures.push_back(std::move(clients_[clients_index]->async_send_request(request).share()));
+					}else{
+						RCLCPP_WARN(this->get_logger(), "worker_%s_%ld, is not ready yet...", node_name.c_str(), clients_index);
+					}
+				}
+				clients_index++;
+			}
+
+			if(current_futures.size() > 0)
+			{
+				std::lock_guard<std::mutex> lock(queue_mutex_);
+				futures_vector_queue_.push(std::move(current_futures));
+			}
+			
+			cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, boxes_img);
+			cv_image_msg_bridge.toImageMsg(small_msg);
+			publisher_boxes_->publish(small_msg);
+			double delay = (this->get_clock()->now() - start).seconds();
+			avg_delay = (avg_delay*delay_window + delay);
+			delay_window++;
+			avg_delay /= delay_window;
+
+			loop_rate.sleep();
+		}
 	}
 
 	void SlaveNode::loop(){
+		
 		running_ = true;
         rclcpp::Rate loop_rate(30); 
+		std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> current_futures = {};
 
-		std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> current_futures;
-        while (running_)
-        {
+		while(rclcpp::ok() && running_){
+			rclcpp::spin_some(shared_from_this());
+		
 			current_futures = {};
+
 			auto start = this->get_clock()->now();
 			
 			{
 				std::unique_lock<std::mutex> lock(queue_mutex_);
 
 				if (futures_vector_queue_.empty()) {
-					//RCLCPP_WARN(this->get_logger(), "Future queue is empty, skipping this loop iteration.");
 					continue;
 				}
-
-				RCLCPP_WARN(this->get_logger(), "Future queue size: %ld", futures_vector_queue_.size());
 				current_futures = futures_vector_queue_.front();
 				futures_vector_queue_.pop();
+				if(current_futures.empty())
+					continue;
 			}
 
-	
 			std_msgs::msg::Header header = std_msgs::msg::Header();
-            std::vector<hpe_msgs::msg::Joints2d> all_joints = {};
+			std::vector<hpe_msgs::msg::Joints2d> all_joints = {};
 
-			RCLCPP_WARN(this->get_logger(), "E, total: %ld", current_futures.size());
-
-			for (size_t i = 0; i < current_futures.size(); ++i){
-				RCLCPP_WARN(this->get_logger(), "E %ld", i);
-				auto result = current_futures[i].wait_for(std::chrono::milliseconds(1500));
-				if(result == std::future_status::ready){	
+			for (size_t i = 0; i < current_futures.size(); i++){
+				auto result = rclcpp::spin_until_future_complete(this->get_node_base_interface(), current_futures[i]);
+				if(result == rclcpp::FutureReturnCode::SUCCESS){
 					try{
 						auto response = current_futures[i].get();
 						all_joints.push_back(response->hpe2d.joints);
@@ -217,30 +242,26 @@ namespace hpe_test {
 						RCLCPP_ERROR(this->get_logger(), "Failed to get response from worker_%s_%zu", node_name.c_str(), i);
 					}
 				}else {
-				    RCLCPP_ERROR(this->get_logger(), "Timeout while waiting for response from worker_%s_%zu", node_name.c_str(), i);
+					RCLCPP_ERROR(this->get_logger(), "Bad future from worker_%s_%zu", node_name.c_str(), i);
 				}
 			}
-
-			RCLCPP_WARN(this->get_logger(), "F");
 
 			hpe_msgs::msg::Slave slave_msg = hpe_msgs::msg::Slave();
 			slave_msg.header = header;
 			slave_msg.all_joints = all_joints;
 			slave_msg.skeletons_n = all_joints.size();
 
-			RCLCPP_WARN(this->get_logger(), "G");
-
 			publisher_slave_->publish(slave_msg);
 			double delay = (this->get_clock()->now() - start).seconds();
 			avg_delay_loop = (avg_delay_loop*delay_window_loop + delay);
 			delay_window_loop++;
 			avg_delay_loop /= delay_window_loop;
-			loop_rate.sleep();
-        }
+
+		}
 	}
 
 	void SlaveNode::setupTensors() {
-		RCLCPP_INFO(this->get_logger(), "Building FlatBufferModel...");
+		//RCLCPP_INFO(this->get_logger(), "Building FlatBufferModel...");
 		model = tflite::FlatBufferModel::BuildFromFile(DETECTION_MODEL_FILES[detection_model_n].c_str());
 		if (!model) {
 			RCLCPP_ERROR(this->get_logger(), "ERROR: Failed to load model from file: %s", DETECTION_MODEL_FILES[detection_model_n].c_str());
@@ -250,7 +271,7 @@ namespace hpe_test {
 		tflite::ops::builtin::BuiltinOpResolver resolver;
 		tflite::InterpreterBuilder builder(*model, resolver);
 
-		RCLCPP_INFO(this->get_logger(), "Building interpreter...");
+		//RCLCPP_INFO(this->get_logger(), "Building interpreter...");
 		builder(&interpreter); 
 		
 		if (!interpreter) {
@@ -280,10 +301,10 @@ namespace hpe_test {
 		int num_outputs = interpreter->outputs().size();
 		for (int i = 0; i < num_outputs; ++i) {
 			const TfLiteTensor* output_tensor = interpreter->tensor(interpreter->outputs()[i]);
-			RCLCPP_INFO(this->get_logger(), "Output Tensor %d: Type=%d", i, output_tensor->type);
-			RCLCPP_INFO(this->get_logger(), "Output Tensor %d Dimensions: ", i);
+			//RCLCPP_INFO(this->get_logger(), "Output Tensor %d: Type=%d", i, output_tensor->type);
+			//RCLCPP_INFO(this->get_logger(), "Output Tensor %d Dimensions: ", i);
 			for (int j = 0; j < output_tensor->dims->size; ++j) {
-				RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j, output_tensor->dims->data[j]);
+				//RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j, output_tensor->dims->data[j]);
 			}
 		}
 
@@ -298,14 +319,27 @@ namespace hpe_test {
 	}
 
 	void SlaveNode::callback(const sensor_msgs::msg::Image &msg) {
-		try {
-			cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-		} catch (cv_bridge::Exception &e) {
-
-			RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
+		{
+			std::lock_guard<std::mutex> lock(msg_to_process_mutex_);
+			msg_to_process_ptr = std::make_shared<sensor_msgs::msg::Image>(msg);
 		}
+	}
 
-		findPpl(cv_ptr->image, msg.header);
+	void SlaveNode::compressedCallback(const sensor_msgs::msg::CompressedImage &msg){
+		cv::Mat image = cv::imdecode(cv::Mat(msg.data), cv::IMREAD_COLOR);
+		sensor_msgs::msg::Image img_msg;
+		img_msg.header = msg.header;
+
+		//piccolo trick per leggere le bags, TODO fixare
+		img_msg.header.stamp = this->get_clock()->now();
+		
+		img_msg.height = image.rows;
+		img_msg.width = image.cols;
+		img_msg.encoding = "bgr8";
+		img_msg.step = static_cast<sensor_msgs::msg::Image::_step_type>(image.step);
+		img_msg.data.assign(image.data, image.data + image.total() * image.elemSize());
+
+		callback(img_msg);
 	}
 
 	void SlaveNode::saveCameraInfo(const sensor_msgs::msg::CameraInfo &msg){
@@ -350,8 +384,23 @@ namespace hpe_test {
 		setupTensors();
 
 		if (raw_topic != "null") {
-			subscription_ = this->create_subscription<sensor_msgs::msg::Image>(raw_topic, 10, std::bind(&SlaveNode::callback, this, _1));
-			RCLCPP_INFO(this->get_logger(), "Ready");
+			//maledette bags...
+			auto topics = this->get_topic_names_and_types();
+			if (topics.find(raw_topic) != topics.end()){
+				for(const auto &topic_type : topics[raw_topic])
+					if (topic_type == "sensor_msgs/msg/Image"){
+						subscription_ = this->create_subscription<sensor_msgs::msg::Image>(raw_topic, 10, std::bind(&SlaveNode::callback, this, _1));
+						RCLCPP_INFO(this->get_logger(), "Ready, raw topic is sensor_msgs/msg/Imag");
+						break;
+					}else if(topic_type == "sensor_msgs/msg/CompressedImage"){
+						compressed_image_sub_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(raw_topic, 10, std::bind(&SlaveNode::compressedCallback, this, _1));
+						RCLCPP_INFO(this->get_logger(), "Ready, raw topic is sensor_msgs/msg/CompressedImage");
+						break;
+					}else
+						RCLCPP_ERROR(this->get_logger(), "%s is not a supported topic type for images", topic_type.c_str());
+
+			}else
+				RCLCPP_ERROR(this->get_logger(), "%s not found", raw_topic.c_str());
 		} else {
 			RCLCPP_INFO(this->get_logger(), "Realsense camera not found, using webcam...");
 			webcam_thread = std::thread([name, this]() {
@@ -361,8 +410,7 @@ namespace hpe_test {
 			subscription_ = this->create_subscription<sensor_msgs::msg::Image>("/webcam_" + name, 10, std::bind(&SlaveNode::callback, this, _1));
 		}
 
-		loop_thread = std::thread(&SlaveNode::loop, this);
-		loop_thread.detach();
+		ppl_thread = std::thread(&SlaveNode::findPpl, this);
   	}
 
 	void SlaveNode::shutdown(){
@@ -374,22 +422,22 @@ namespace hpe_test {
 
 		if(webcam_thread.joinable()){
 			webcam_thread.join();
-			std::cout << "Webcam node joined..." << std::endl;
+			RCLCPP_INFO(this->get_logger(), "Webcam node joined...");
 		}
 
-		if(loop_thread.joinable()){
-			loop_thread.join();
-			std::cout << "Loop thread joined..." << std::endl;
+		if(ppl_thread.joinable()){
+			ppl_thread.join();
+			RCLCPP_INFO(this->get_logger(), "Ppl thread joined...");
 		}
 
 		for (auto& t : worker_threads) {
 			if (t.joinable()) {
 				t.join();
-				std::cout << "Worker node joined..." << std::endl;
+				RCLCPP_INFO(this->get_logger(), "Worker node joined...");
 			}
 		}
-		RCLCPP_WARN(this->get_logger(), "Average FPS boxes: %f", 1 / avg_delay);
-		RCLCPP_WARN(this->get_logger(), "Average FPS loop: %f", 1 / avg_delay_loop);
+		RCLCPP_WARN(this->get_logger(), "Average FPS boxes: %f, total frames: %d", 1 / avg_delay, delay_window);
+		RCLCPP_WARN(this->get_logger(), "Average FPS loop: 	%f, total frames: %d", 1 / avg_delay_loop, delay_window_loop);
 	}
 
 	SlaveNode::~SlaveNode(){
@@ -402,9 +450,9 @@ namespace hpe_test {
 		if(webcam_thread.joinable()){
 			webcam_thread.join();
 		}
-	
-		if(loop_thread.joinable()){
-			loop_thread.join();
+
+		if(ppl_thread.joinable()){
+			ppl_thread.join();
 		}
 
 		for (auto& t : worker_threads) {
@@ -483,9 +531,6 @@ namespace hpe_test {
 
 			response->calibration.frame = transform_msg;
 		} else {
-
-					
-
 			hpe_msgs::msg::IntrinsicParams intr_prms = hpe_msgs::msg::IntrinsicParams();
 			std::string frame_id = camera_info.header.frame_id;
 
@@ -496,8 +541,10 @@ namespace hpe_test {
 				distortion[i] = camera_info.d[i];
 			}
 
-			for(size_t i = 0; i < 9; i ++){
-				k[i] = camera_info.k[i];
+			for (size_t row = 0; row < 3; ++row) {
+				for (size_t col = 0; col < 3; ++col) {
+					k[col * 3 + row] = camera_info.k[row * 3 + col];
+				}
 			}
 
 			intr_prms.distortion_coefficients = distortion;
@@ -505,6 +552,12 @@ namespace hpe_test {
 			
 			response ->calibration.frame = tf_buffer.lookupTransform("world", frame_id, tf2::TimePointZero);
 			response->calibration.intrinsic_params = intr_prms;
+
+			RCLCPP_WARN(this->get_logger(), "Calibratin frame id: %s \nMatrix k:\n[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\nMatrix k (column major):\n[%f, %f, %f, %f, %f, %f, %f, %f, %f]\n"
+										  , frame_id.c_str(), camera_info.k[0], camera_info.k[1], camera_info.k[2], camera_info.k[3],
+										  camera_info.k[4], camera_info.k[5], camera_info.k[6], camera_info.k[7], camera_info.k[8],
+										  k[0], k[1], k[2], k[3], k[4], k[5], k[6], k[7], k[8]);
+
 
 		}
 

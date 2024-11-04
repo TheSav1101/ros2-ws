@@ -3,6 +3,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <opencv4/opencv2/opencv.hpp>
@@ -33,7 +34,7 @@ namespace hpe_test {
 			SlaveNode(std::string name, std::string raw_topic, int model_, int detection_model_, int starting_workers, std::string calibration_topic);
 			~SlaveNode();
 			void shutdown();
-
+			void loop();
 
 		private:
 			float computeIoU(const float* box1, const float* box2);
@@ -42,10 +43,11 @@ namespace hpe_test {
 			void setupTensors();
 			void saveCameraInfo(const sensor_msgs::msg::CameraInfo &msg);
 			void callback(const sensor_msgs::msg::Image &msg);
+			void compressedCallback(const sensor_msgs::msg::CompressedImage &msg);
 			void open_camera();
-			void findPpl(cv::Mat&, std_msgs::msg::Header);
+			void findPpl();
 			void calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request [[maybe_unused]], std::shared_ptr<hpe_msgs::srv::Calibration::Response> response);
-			void loop();
+			
 
 			//model numbers (see data.cpp)
 			int detection_model_n = 0; 
@@ -65,6 +67,9 @@ namespace hpe_test {
 			rclcpp::Publisher<hpe_msgs::msg::Slave>::SharedPtr publisher_slave_;
 			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedPtr> clients_;
 			rclcpp::Service<hpe_msgs::srv::Calibration>::SharedPtr calibration_service_;
+
+			//Read from some bags...
+			rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_sub_;
 			
 			//subscriber
 			rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
@@ -73,17 +78,20 @@ namespace hpe_test {
 			//tflite poiners
 			std::unique_ptr<tflite::FlatBufferModel> model;
 			std::unique_ptr<tflite::Interpreter> interpreter;
-
 					
 			//name
 			std::string node_name;
 
 			//AIUTO, il multithreading
 			std::thread webcam_thread;
-			std::thread loop_thread;
+			std::thread ppl_thread;
 			std::queue<std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture>> futures_vector_queue_;
 			std::mutex queue_mutex_;
 			std::atomic<bool> running_;
+			rclcpp::TimerBase::SharedPtr loop_timer_;
+
+			std::shared_ptr<sensor_msgs::msg::Image> msg_to_process_ptr;
+			std::mutex msg_to_process_mutex_;
 
 			std::shared_ptr<hpe_test::WebcamNode> webcam_node;
 
