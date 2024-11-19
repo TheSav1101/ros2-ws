@@ -50,7 +50,7 @@ namespace hpe_test{
         avg_delay = (avg_delay*delay_window + delay);
         delay_window++;
         avg_delay /= delay_window;
-		//RCLCPP_INFO(this->get_logger(), "Service %d processing completed", delay_window);
+		RCLCPP_INFO(this->get_logger(), "Service %d processing completed", delay_window);
 
 	}
 

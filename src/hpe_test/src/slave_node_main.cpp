@@ -19,9 +19,12 @@ int main(int argc, char *argv[]) {
 	rclcpp::init(argc, argv);
 	try {
 		{
-			auto node = std::make_shared<hpe_test::SlaveNode>(argv[1], argv[2], atoi(argv[3]), atoi(argv[4]), starting_workers, calibration_topic);
-			node->loop();
-			node->shutdown();
+			auto executor = rclcpp::executors::MultiThreadedExecutor();
+			auto node = std::make_shared<hpe_test::SlaveNode>(&executor, argv[1], argv[2], atoi(argv[3]), atoi(argv[4]), starting_workers, calibration_topic);
+			executor.add_node(node);
+			executor.spin();
+			executor.cancel();
+			node->shutdown();	
 		}
 		rclcpp::shutdown();
 		std::cout << "ROS2 shutdown complete" << std::endl;

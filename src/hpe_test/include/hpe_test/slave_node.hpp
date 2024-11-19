@@ -17,6 +17,7 @@
 #include "hpe_msgs/msg/slave.hpp"
 #include "hpe_msgs/msg/box.hpp"
 #include "hpe_test/worker_node.hpp"
+#include "hpe_test/loop_node.hpp"
 #include "hpe_test/webcam_node.hpp"
 #include "hpe_test/data.hpp"
 #include "hpe_msgs/srv/calibration.hpp"
@@ -26,15 +27,15 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
+#include <hpe_test/responses.hpp>
 
 namespace hpe_test {
 
 	class SlaveNode : public rclcpp::Node {
 		public:
-			SlaveNode(std::string name, std::string raw_topic, int model_, int detection_model_, int starting_workers, std::string calibration_topic);
+			SlaveNode(rclcpp::executors::MultiThreadedExecutor* executor, std::string name, std::string raw_topic, int model_, int detection_model_, int starting_workers, std::string calibration_topic);
 			~SlaveNode();
 			void shutdown();
-			void loop();
 
 		private:
 			float computeIoU(const float* box1, const float* box2);
@@ -45,9 +46,9 @@ namespace hpe_test {
 			void callback(const sensor_msgs::msg::Image &msg);
 			void compressedCallback(const sensor_msgs::msg::CompressedImage &msg);
 			void open_camera();
-			void findPpl();
 			void calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request [[maybe_unused]], std::shared_ptr<hpe_msgs::srv::Calibration::Response> response);
-			
+			void response_received_callback(rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture future, Responses* response);
+			rclcpp::executors::MultiThreadedExecutor* executor_;
 
 			//model numbers (see data.cpp)
 			int detection_model_n = 0; 
@@ -64,9 +65,10 @@ namespace hpe_test {
 
 			//publishers
 			rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_boxes_;
-			rclcpp::Publisher<hpe_msgs::msg::Slave>::SharedPtr publisher_slave_;
-			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedPtr> clients_;
 			rclcpp::Service<hpe_msgs::srv::Calibration>::SharedPtr calibration_service_;
+
+			//clients list
+			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedPtr> clients_;
 
 			//Read from some bags...
 			rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_sub_;
@@ -83,27 +85,20 @@ namespace hpe_test {
 			std::string node_name;
 
 			//AIUTO, il multithreading
-			std::thread webcam_thread;
-			std::thread ppl_thread;
 			std::queue<std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture>> futures_vector_queue_;
 			std::mutex queue_mutex_;
 			std::atomic<bool> running_;
-			rclcpp::TimerBase::SharedPtr loop_timer_;
-
-			std::shared_ptr<sensor_msgs::msg::Image> msg_to_process_ptr;
-			std::mutex msg_to_process_mutex_;
 
 			std::shared_ptr<hpe_test::WebcamNode> webcam_node;
-
+			std::shared_ptr<hpe_test::LoopNode> loop_node;
+			
 			//worker stuff
-			std::vector<std::thread> worker_threads;
+			std::vector<std::shared_ptr<hpe_test::WorkerNode>> workers_;
 			int workers_n = 0;
 
 			//Metriche fps
 			int delay_window;
             double avg_delay;
-			int delay_window_loop;
-            double avg_delay_loop;
 
 			//TODO sort this stuff...
 			int input_tensor_idx;
@@ -121,7 +116,6 @@ namespace hpe_test {
 			sensor_msgs::msg::Image small_msg;
 			float *input_data;
 			float *output_data;
-
 		};
 
 } 

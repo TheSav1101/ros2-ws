@@ -66,197 +66,138 @@ namespace hpe_test {
 
 		clients_.push_back(this->create_client<hpe_msgs::srv::Estimate>("estimate" + name));
 		
-		worker_threads.push_back(std::thread([name, this]() {
-			auto worker_node = std::make_shared<hpe_test::WorkerNode>(name, hpe_model_n);
-			rclcpp::spin(worker_node);
-		}));
+		auto new_w = std::make_shared<hpe_test::WorkerNode>(name, hpe_model_n);
+
+		executor_->add_node(new_w);
+
+		workers_.push_back(new_w);
 	}
 
-  	void SlaveNode::findPpl() {
-		running_ = true;
+  	void SlaveNode::callback(const sensor_msgs::msg::Image &msg) {
 		cv::Mat img;
 		std_msgs::msg::Header header;
-		rclcpp::Rate loop_rate(30); 
-		while(rclcpp::ok() && running_){
 			
-			auto start = this->get_clock()->now();
+		auto start = this->get_clock()->now();
 
-			{
-				std::lock_guard<std::mutex> lock(msg_to_process_mutex_);
-				if(msg_to_process_ptr == nullptr)
-					continue;
-
-				try {
-					cv_ptr = cv_bridge::toCvCopy(*msg_to_process_ptr, sensor_msgs::image_encodings::BGR8);
-				} catch (cv_bridge::Exception &e) {
-					RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
-				}
-
-				img = cv_ptr->image; 
-				header = msg_to_process_ptr->header;
-
-				msg_to_process_ptr.reset();
-			}
-
-			cv::resize(img, small, cv::Size(DETECTION_MODEL_WIDTH[detection_model_n], DETECTION_MODEL_HEIGHT[detection_model_n]), cv::INTER_LINEAR);
-
-			// TODO togliere sta roba
-			cv::Mat floatImg;
-			small.convertTo(floatImg, CV_32FC3, 1.0/255.0);
-		
-			memcpy(input_data, floatImg.data, input_size * sizeof(float));
-
-			if (!interpreter) {
-				RCLCPP_ERROR(this->get_logger(), "ERROR: Interpreter not initialized");
-				return;
-			}
-			if (interpreter->Invoke() != kTfLiteOk){
-				RCLCPP_ERROR( this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
-				return;
-			}
-			float* boxes = interpreter->typed_output_tensor<float>(0);
-			float* confidence = interpreter->typed_output_tensor<float>(1);
-
-		
-			std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.4, 0.65);
-			//RCLCPP_INFO(this->get_logger(), "Found %ld people", filtered_indices.size());
-
-			cv::Mat boxes_img = img.clone();
-
-			float scaleX = (float) img.cols / (float) DETECTION_MODEL_WIDTH[detection_model_n];
-			float scaleY = (float) img.rows / (float) DETECTION_MODEL_HEIGHT[detection_model_n];
-
-			size_t clients_index = 0;
-
-			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> current_futures = {};
-
-			for(size_t i: filtered_indices){
-
-				float x1 = boxes[4 * i]     - boxes[4 * i + 2]/2.0;
-				float y1 = boxes[4 * i + 1] - boxes[4 * i + 3]/2.0;
-				float x2 = boxes[4 * i]     + boxes[4 * i + 2]/2.0;
-				float y2 = boxes[4 * i + 1] + boxes[4 * i + 3]/2.0;
-
-				cv::rectangle(boxes_img, cv::Point(static_cast<int>(x1 * scaleX), static_cast<int>(y1 * scaleY)), 
-					cv::Point(static_cast<int>(x2 * scaleX), static_cast<int>(y2 * scaleY)),
-					cv::Scalar(0, 255, 0), 2);
-
-				cv::Rect box(x1*scaleX, y1*scaleY, (int)(boxes[4 * i + 2] * scaleX), (int)(boxes[4 * i + 3] * scaleY));
-
-				box.x = std::max(0, box.x);
-				box.y = std::max(0, box.y);
-				box.width = std::min(box.width, img.cols - box.x);
-				box.height = std::min(box.height, img.rows - box.y);
-
-				cv::Mat crop = img(box);
-				cv::resize(crop, small, cv::Size(MODEL_WIDTH[hpe_model_n], MODEL_HEIGHT[hpe_model_n]), cv::INTER_LINEAR);
-				cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, small);
-				cv_image_msg_bridge.toImageMsg(small_msg);
-
-				auto det_msg = hpe_msgs::msg::Detection();
-				auto box_msg = hpe_msgs::msg::Box();
-				auto request = std::make_shared<hpe_msgs::srv::Estimate::Request>();
-
-
-				box_msg.x 			= box.x;
-				box_msg.y 			= box.y;
-				box_msg.width 		= box.width;
-				box_msg.height 		= box.height;
-				box_msg.img_width 	= img.cols;
-				box_msg.img_height 	= img.rows;
-
-				det_msg.image 		= small_msg;
-				det_msg.box 		= box_msg;
-
-				request->detection 	= det_msg;
-
-
-				if (clients_index >= clients_.size()) {
-					RCLCPP_WARN(this->get_logger(), "worker_%s_%ld was not created yet, i will create a new one...", node_name.c_str(), clients_index);
-					(void) std::async(std::launch::async, &SlaveNode::create_new_worker, this);
-				}else{
-					if(clients_[clients_index]->wait_for_service(std::chrono::seconds(0))){
-						current_futures.push_back(std::move(clients_[clients_index]->async_send_request(request).share()));
-					}else{
-						RCLCPP_WARN(this->get_logger(), "worker_%s_%ld, is not ready yet...", node_name.c_str(), clients_index);
-					}
-				}
-				clients_index++;
-			}
-
-			if(current_futures.size() > 0)
-			{
-				std::lock_guard<std::mutex> lock(queue_mutex_);
-				futures_vector_queue_.push(std::move(current_futures));
-			}
-			
-			cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, boxes_img);
-			cv_image_msg_bridge.toImageMsg(small_msg);
-			publisher_boxes_->publish(small_msg);
-			double delay = (this->get_clock()->now() - start).seconds();
-			avg_delay = (avg_delay*delay_window + delay);
-			delay_window++;
-			avg_delay /= delay_window;
-
-			loop_rate.sleep();
+		try {
+			cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+		} catch (cv_bridge::Exception &e) {
+			RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
 		}
-	}
 
-	void SlaveNode::loop(){
-		
-		running_ = true;
-        rclcpp::Rate loop_rate(30); 
+		img = cv_ptr->image; 
+		header = msg.header;		
+
+		cv::resize(img, small, cv::Size(DETECTION_MODEL_WIDTH[detection_model_n], DETECTION_MODEL_HEIGHT[detection_model_n]), cv::INTER_LINEAR);
+
+		// TODO togliere sta roba
+		cv::Mat floatImg;
+		small.convertTo(floatImg, CV_32FC3, 1.0/255.0);
+	
+		memcpy(input_data, floatImg.data, input_size * sizeof(float));
+
+		if (!interpreter) {
+			RCLCPP_ERROR(this->get_logger(), "ERROR: Interpreter not initialized");
+			return;
+		}
+		if (interpreter->Invoke() != kTfLiteOk){
+			RCLCPP_ERROR( this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
+			return;
+		}
+		float* boxes = interpreter->typed_output_tensor<float>(0);
+		float* confidence = interpreter->typed_output_tensor<float>(1);
+
+	
+		std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.4, 0.65);
+		//RCLCPP_INFO(this->get_logger(), "Found %ld people", filtered_indices.size());
+
+		cv::Mat boxes_img = img.clone();
+
+		float scaleX = (float) img.cols / (float) DETECTION_MODEL_WIDTH[detection_model_n];
+		float scaleY = (float) img.rows / (float) DETECTION_MODEL_HEIGHT[detection_model_n];
+
+		size_t clients_index = 0;
+
 		std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> current_futures = {};
 
-		while(rclcpp::ok() && running_){
-			rclcpp::spin_some(shared_from_this());
+		for(size_t i: filtered_indices){
+
+			float x1 = boxes[4 * i]     - boxes[4 * i + 2]/2.0;
+			float y1 = boxes[4 * i + 1] - boxes[4 * i + 3]/2.0;
+			float x2 = boxes[4 * i]     + boxes[4 * i + 2]/2.0;
+			float y2 = boxes[4 * i + 1] + boxes[4 * i + 3]/2.0;
+
+			cv::rectangle(boxes_img, cv::Point(static_cast<int>(x1 * scaleX), static_cast<int>(y1 * scaleY)), 
+				cv::Point(static_cast<int>(x2 * scaleX), static_cast<int>(y2 * scaleY)),
+				cv::Scalar(0, 255, 0), 2);
+
+			cv::Rect box(x1*scaleX, y1*scaleY, (int)(boxes[4 * i + 2] * scaleX), (int)(boxes[4 * i + 3] * scaleY));
+
+			box.x = std::max(0, box.x);
+			box.y = std::max(0, box.y);
+			box.width = std::min(box.width, img.cols - box.x);
+			box.height = std::min(box.height, img.rows - box.y);
+
+			cv::Mat crop = img(box);
+			cv::resize(crop, small, cv::Size(MODEL_WIDTH[hpe_model_n], MODEL_HEIGHT[hpe_model_n]), cv::INTER_LINEAR);
+			cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, small);
+			cv_image_msg_bridge.toImageMsg(small_msg);
+
+			auto det_msg = hpe_msgs::msg::Detection();
+			auto box_msg = hpe_msgs::msg::Box();
+			auto request = std::make_shared<hpe_msgs::srv::Estimate::Request>();
+
+
+			box_msg.x 			= box.x;
+			box_msg.y 			= box.y;
+			box_msg.width 		= box.width;
+			box_msg.height 		= box.height;
+			box_msg.img_width 	= img.cols;
+			box_msg.img_height 	= img.rows;
+
+			det_msg.image 		= small_msg;
+			det_msg.box 		= box_msg;
+
+			request->detection 	= det_msg;
+
+
+			if (clients_index >= clients_.size()) {
+				RCLCPP_WARN(this->get_logger(), "worker_%s_%ld was not created yet, i will create a new one...", node_name.c_str(), clients_index);
+				(void) std::async(std::launch::async, &SlaveNode::create_new_worker, this);
+			}else{
+				if(clients_[clients_index]->wait_for_service(std::chrono::seconds(0))){
+					current_futures.push_back(std::move(clients_[clients_index]->async_send_request(request).share()));
+				}else{
+					RCLCPP_WARN(this->get_logger(), "worker_%s_%ld, is not ready yet...", node_name.c_str(), clients_index);
+				}
+			}
+			clients_index++;
+		}
+
+		if(current_futures.size() > 0)
+		{
+			std::lock_guard<std::mutex> lock(queue_mutex_);
+			futures_vector_queue_.push(std::move(current_futures));
+		}
 		
-			current_futures = {};
+		cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, boxes_img);
+		cv_image_msg_bridge.toImageMsg(small_msg);
+		publisher_boxes_->publish(small_msg);
+		double delay = (this->get_clock()->now() - start).seconds();
+		avg_delay = (avg_delay*delay_window + delay);
+		delay_window++;
+		avg_delay /= delay_window;
 
-			auto start = this->get_clock()->now();
-			
-			{
-				std::unique_lock<std::mutex> lock(queue_mutex_);
+	}
 
-				if (futures_vector_queue_.empty()) {
-					continue;
-				}
-				current_futures = futures_vector_queue_.front();
-				futures_vector_queue_.pop();
-				if(current_futures.empty())
-					continue;
-			}
+	void SlaveNode::response_received_callback(rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture future, Responses* response){
+		auto result = future.get();
+		response->add(result->hpe2d);
 
-			std_msgs::msg::Header header = std_msgs::msg::Header();
-			std::vector<hpe_msgs::msg::Joints2d> all_joints = {};
+		if(response->isReady()){
+			//do stuff
 
-			for (size_t i = 0; i < current_futures.size(); i++){
-				auto result = rclcpp::spin_until_future_complete(this->get_node_base_interface(), current_futures[i]);
-				if(result == rclcpp::FutureReturnCode::SUCCESS){
-					try{
-						auto response = current_futures[i].get();
-						all_joints.push_back(response->hpe2d.joints);
-						header = response->hpe2d.header;
-					}
-					catch(const std::exception& e){
-						RCLCPP_ERROR(this->get_logger(), "Failed to get response from worker_%s_%zu", node_name.c_str(), i);
-					}
-				}else {
-					RCLCPP_ERROR(this->get_logger(), "Bad future from worker_%s_%zu", node_name.c_str(), i);
-				}
-			}
-
-			hpe_msgs::msg::Slave slave_msg = hpe_msgs::msg::Slave();
-			slave_msg.header = header;
-			slave_msg.all_joints = all_joints;
-			slave_msg.skeletons_n = all_joints.size();
-
-			publisher_slave_->publish(slave_msg);
-			double delay = (this->get_clock()->now() - start).seconds();
-			avg_delay_loop = (avg_delay_loop*delay_window_loop + delay);
-			delay_window_loop++;
-			avg_delay_loop /= delay_window_loop;
-
+			//delete pointer
 		}
 	}
 
@@ -290,11 +231,11 @@ namespace hpe_test {
 		int num_inputs = interpreter->inputs().size();
     	for (int i = 0; i < num_inputs; ++i) {
         	const TfLiteTensor* input_tensor = interpreter->tensor(interpreter->inputs()[i]);
-        	RCLCPP_INFO(this->get_logger(), "Input Tensor %d: Type=%d", i, input_tensor->type);
-        	RCLCPP_INFO(this->get_logger(), "Input Tensor %d Dimensions: ", i);
+        	//RCLCPP_INFO(this->get_logger(), "Input Tensor %d: Type=%d", i, input_tensor->type);
+        	//RCLCPP_INFO(this->get_logger(), "Input Tensor %d Dimensions: ", i);
 			for (int j = 0; j < input_tensor->dims->size; ++j) {
 				input_size *= input_tensor->dims->data[j];
-				RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j, input_tensor->dims->data[j]);
+				//RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j, input_tensor->dims->data[j]);
 			}
 		}
 
@@ -318,13 +259,6 @@ namespace hpe_test {
 		input_data = interpreter->typed_input_tensor<float>(0);
 	}
 
-	void SlaveNode::callback(const sensor_msgs::msg::Image &msg) {
-		{
-			std::lock_guard<std::mutex> lock(msg_to_process_mutex_);
-			msg_to_process_ptr = std::make_shared<sensor_msgs::msg::Image>(msg);
-		}
-	}
-
 	void SlaveNode::compressedCallback(const sensor_msgs::msg::CompressedImage &msg){
 		cv::Mat image = cv::imdecode(cv::Mat(msg.data), cv::IMREAD_COLOR);
 		sensor_msgs::msg::Image img_msg;
@@ -346,13 +280,13 @@ namespace hpe_test {
 		camera_info = msg;
 	}
 
-	SlaveNode::SlaveNode(std::string name, std::string raw_topic, int hpe_model_n_, int detection_model_n_, int starting_workers, std::string calibration_topic) : Node(name), tf_buffer(this->get_clock()), tf_listener(tf_buffer) {
+	SlaveNode::SlaveNode(rclcpp::executors::MultiThreadedExecutor* executor, std::string name, std::string raw_topic, int hpe_model_n_, int detection_model_n_, int starting_workers, std::string calibration_topic) : Node(name), tf_buffer(this->get_clock()), tf_listener(tf_buffer) {
 		node_name = name;
 		
+		executor_ = executor;
+
 		avg_delay = 0.0;
-		avg_delay_loop = 0.0;
 		delay_window = 0;
-		delay_window_loop = 0;
 
 		futures_vector_queue_={};
 
@@ -374,13 +308,13 @@ namespace hpe_test {
 
 		clients_ = {};
 		publisher_boxes_ = this->create_publisher<sensor_msgs::msg::Image>("/boxes_" + name, 10);
-		publisher_slave_ = this->create_publisher<hpe_msgs::msg::Slave>("/slave_" + name, 10);
 
 		for(int i = 0; i < starting_workers; i++){
 			create_new_worker();
 		}
 
 		calibration_service_ = this->create_service<hpe_msgs::srv::Calibration>("/calibration_" + name, std::bind(&SlaveNode::calibrationService, this, _1, _2));
+
 		setupTensors();
 
 		if (raw_topic != "null") {
@@ -403,62 +337,56 @@ namespace hpe_test {
 				RCLCPP_ERROR(this->get_logger(), "%s not found", raw_topic.c_str());
 		} else {
 			RCLCPP_INFO(this->get_logger(), "Realsense camera not found, using webcam...");
-			webcam_thread = std::thread([name, this]() {
-				webcam_node = std::make_shared<hpe_test::WebcamNode>(name);
-				rclcpp::spin(webcam_node);
-			});
+
+			webcam_node = std::make_shared<hpe_test::WebcamNode>(name);
+
+			executor_->add_node(webcam_node);		
+			
 			subscription_ = this->create_subscription<sensor_msgs::msg::Image>("/webcam_" + name, 10, std::bind(&SlaveNode::callback, this, _1));
 		}
 
-		ppl_thread = std::thread(&SlaveNode::findPpl, this);
+		loop_node = std::make_shared<hpe_test::LoopNode>(name, &futures_vector_queue_, &queue_mutex_);
+		executor_->add_node(loop_node);
+		loop_node->start();
   	}
 
 	void SlaveNode::shutdown(){
 		RCLCPP_INFO(this->get_logger(), "Shutting down...");
 		running_ = false;
+
 		if(webcam_node){
 			webcam_node->stop();
+			executor_->remove_node(webcam_node);
 		}
 
-		if(webcam_thread.joinable()){
-			webcam_thread.join();
-			RCLCPP_INFO(this->get_logger(), "Webcam node joined...");
+		if(loop_node){
+			loop_node->shutdown();
+			executor_->remove_node(loop_node);
 		}
 
-		if(ppl_thread.joinable()){
-			ppl_thread.join();
-			RCLCPP_INFO(this->get_logger(), "Ppl thread joined...");
+		for (auto& w : workers_) {
+			executor_->remove_node(w);
 		}
 
-		for (auto& t : worker_threads) {
-			if (t.joinable()) {
-				t.join();
-				RCLCPP_INFO(this->get_logger(), "Worker node joined...");
-			}
-		}
 		RCLCPP_WARN(this->get_logger(), "Average FPS boxes: %f, total frames: %d", 1 / avg_delay, delay_window);
-		RCLCPP_WARN(this->get_logger(), "Average FPS loop: 	%f, total frames: %d", 1 / avg_delay_loop, delay_window_loop);
 	}
 
 	SlaveNode::~SlaveNode(){
-		if(webcam_node){
-			webcam_node->stop();
-		}
 
 		running_ = false;
-		
-		if(webcam_thread.joinable()){
-			webcam_thread.join();
+
+		if(webcam_node){
+			webcam_node->stop();
+			executor_->remove_node(webcam_node);
 		}
 
-		if(ppl_thread.joinable()){
-			ppl_thread.join();
+		if(loop_node){
+			loop_node->shutdown();
+			executor_->remove_node(loop_node);
 		}
 
-		for (auto& t : worker_threads) {
-			if (t.joinable()) {
-				t.join();
-			}
+		for (auto& w : workers_) {
+			executor_->remove_node(w);
 		}
 	}
 

@@ -43,9 +43,9 @@ namespace hpe_test{
         RCLCPP_WARN(this->get_logger(), "Average FPS loop: %f", 1 / avg_delay);
     }
 
-    void MasterNodeSingle::callback(const hpe_msgs::msg::Slave &msg, int index, std::string topic){
+    void MasterNodeSingle::callback(const hpe_msgs::msg::Slave &msg, int index){
         slaves_feedback_[index] = msg;
-        //RCLCPP_INFO(this->get_logger(), "Recived from %s", topic.c_str());
+        RCLCPP_INFO(this->get_logger(), "Recived from %d", index);
     }
 
     void MasterNodeSingle::loop(){
@@ -237,7 +237,7 @@ namespace hpe_test{
 
                 auto sub = this->create_subscription<hpe_msgs::msg::Slave>(
                 topic_name, 10, [this, index, topic_name](const hpe_msgs::msg::Slave::SharedPtr msg) {
-                    this->callback(*msg, index, topic_name);
+                    this->callback(*msg, index);
                 });
                 subscribers_.push_back(sub);
                 subscribed_topics_names_.insert(topic_name);
@@ -272,36 +272,34 @@ namespace hpe_test{
         }
     }
 
-void MasterNodeSingle::buildAB_lists(int joint_n) {
+    void MasterNodeSingle::buildAB_lists(int joint_n) {
 
-    int num_rows = filtered_feedbacks.size() * 2;
+        int num_rows = filtered_feedbacks.size() * 2;
 
-    A_.resize(num_rows, 3);
-    B_.resize(num_rows, 1);
+        A_.resize(num_rows, 3);
+        B_.resize(num_rows, 1);
 
-    int row_offset = 0;
+        int row_offset = 0;
 
-    for (size_t i = 0; i < filtered_feedbacks.size(); i++) {
-        if ((int) filtered_feedbacks[0].all_joints[0].dim <= joint_n) {
-            RCLCPP_ERROR(this->get_logger(), "ERROR, JOINT INDEX OUT OF BOUNDS");
+        for (size_t i = 0; i < filtered_feedbacks.size(); i++) {
+            if ((int) filtered_feedbacks[0].all_joints[0].dim <= joint_n) {
+                RCLCPP_ERROR(this->get_logger(), "ERROR, JOINT INDEX OUT OF BOUNDS");
+            }
+
+            float x = filtered_feedbacks[i].all_joints[0].x[joint_n];
+            float y = filtered_feedbacks[i].all_joints[0].y[joint_n];
+
+            Eigen::Vector2f p = Eigen::Vector2f::Zero();
+            p(0) = x;
+            p(1) = y;
+
+            Eigen::Matrix<float, 2, 3> A_under = slaves_calibration_[camera_indices[i]].getARows(p);
+            Eigen::Matrix<float, 2, 1> B_under = slaves_calibration_[camera_indices[i]].getBRows(p);
+
+            A_.block(row_offset, 0, 2, 3) = A_under;
+            B_.block(row_offset, 0, 2, 1) = B_under;
+
+            row_offset += 2;
         }
-
-        float x = filtered_feedbacks[i].all_joints[0].x[joint_n];
-        float y = filtered_feedbacks[i].all_joints[0].y[joint_n];
-
-        Eigen::Vector2f p = Eigen::Vector2f::Zero();
-        p(0) = x;
-        p(1) = y;
-
-        Eigen::Matrix<float, 2, 3> A_under = slaves_calibration_[camera_indices[i]].getARows(p);
-        Eigen::Matrix<float, 2, 1> B_under = slaves_calibration_[camera_indices[i]].getBRows(p);
-
-        A_.block(row_offset, 0, 2, 3) = A_under;
-        B_.block(row_offset, 0, 2, 1) = B_under;
-
-        row_offset += 2;
     }
-}
-
-
 };

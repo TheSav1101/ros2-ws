@@ -25,7 +25,7 @@ namespace hpe_test {
 
 		private:
 			//salva out di ogni raspberry
-			void callback(const hpe_msgs::msg::Slave &msg, int index, std::string topic);
+			void callback(const hpe_msgs::msg::Slave &msg, int index);
 			void loop();
 			void scan_for_slaves();
 			void requestCalibration(std::string &service_name);
@@ -52,7 +52,7 @@ namespace hpe_test {
 			std::atomic<bool> running_;
 			std::thread loop_thread;
 
-			const float MAX_TIME_DIFF = 0.25;
+			const float MAX_TIME_DIFF = 1;
 			const int max_iterations = 3;
 			const int max_joints = 17;
 
