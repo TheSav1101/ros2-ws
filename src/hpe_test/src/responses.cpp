@@ -13,12 +13,17 @@ namespace hpe_test{
         return (int)responses.size() == size_;
     }
 
-    void Responses::add(hpe_msgs::msg::Hpe2d& msg){
-        if((int)responses.size() < size_){
-            responses.push_back(msg);
-        }else{
-            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "OUT OF BOUNDS");
+    bool Responses::add(hpe_msgs::msg::Hpe2d& msg){
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if((int)responses.size() < size_){
+                responses.push_back(msg);
+            }else{
+                RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "OUT OF BOUNDS");
+            }
+            return (int)responses.size() == size_;
         }
+        
     }
 
     std::vector<hpe_msgs::msg::Hpe2d> Responses::get(){

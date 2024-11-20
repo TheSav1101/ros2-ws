@@ -108,8 +108,7 @@ namespace hpe_test {
 		float* confidence = interpreter->typed_output_tensor<float>(1);
 
 	
-		std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.4, 0.65);
-		//RCLCPP_INFO(this->get_logger(), "Found %ld people", filtered_indices.size());
+		std::vector<size_t> filtered_indices = nonMaxSuppression(boxes, confidence, 2535, 0.25, 0.35);
 
 		cv::Mat boxes_img = img.clone();
 
@@ -118,7 +117,17 @@ namespace hpe_test {
 
 		size_t clients_index = 0;
 
-		std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture> current_futures = {};
+		Responses* curr_responses = new Responses(filtered_indices.size());
+
+		responses_ptrs_.push_back(curr_responses);
+
+		auto response_received_callback = [this, curr_responses](rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture future){
+			RCLCPP_INFO(this->get_logger(), "Executing callback");
+			auto result = future.get();
+			if(curr_responses->add(result->hpe2d)){
+				all_response_received_callback(curr_responses);
+			}
+		};
 
 		for(size_t i: filtered_indices){
 
@@ -159,25 +168,20 @@ namespace hpe_test {
 			det_msg.box 		= box_msg;
 
 			request->detection 	= det_msg;
+			request->request_number = delay_window;
 
 
 			if (clients_index >= clients_.size()) {
 				RCLCPP_WARN(this->get_logger(), "worker_%s_%ld was not created yet, i will create a new one...", node_name.c_str(), clients_index);
 				(void) std::async(std::launch::async, &SlaveNode::create_new_worker, this);
 			}else{
-				if(clients_[clients_index]->wait_for_service(std::chrono::seconds(0))){
-					current_futures.push_back(std::move(clients_[clients_index]->async_send_request(request).share()));
+				if(clients_[clients_index]->wait_for_service(std::chrono::seconds(0)) && workers_[clients_index]->isReady()){
+					clients_[clients_index]->async_send_request(request, response_received_callback);
 				}else{
 					RCLCPP_WARN(this->get_logger(), "worker_%s_%ld, is not ready yet...", node_name.c_str(), clients_index);
 				}
 			}
 			clients_index++;
-		}
-
-		if(current_futures.size() > 0)
-		{
-			std::lock_guard<std::mutex> lock(queue_mutex_);
-			futures_vector_queue_.push(std::move(current_futures));
 		}
 		
 		cv_image_msg_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, boxes_img);
@@ -187,17 +191,35 @@ namespace hpe_test {
 		avg_delay = (avg_delay*delay_window + delay);
 		delay_window++;
 		avg_delay /= delay_window;
-
+		RCLCPP_INFO(this->get_logger(), "%d: ppl found=%ld, FPS=%f", delay_window, filtered_indices.size(), 1/delay);
 	}
 
-	void SlaveNode::response_received_callback(rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture future, Responses* response){
-		auto result = future.get();
-		response->add(result->hpe2d);
+	void SlaveNode::all_response_received_callback(Responses* response){
 
 		if(response->isReady()){
-			//do stuff
+			std_msgs::msg::Header header = std_msgs::msg::Header();
+			std::vector<hpe_msgs::msg::Joints2d> all_joints = {};
+
+			for(hpe_msgs::msg::Hpe2d hpe: response->get()){
+				all_joints.push_back(hpe.joints);
+				header = hpe.header;
+			}
+
+			hpe_msgs::msg::Slave slave_msg = hpe_msgs::msg::Slave();
+			slave_msg.header = header;
+			slave_msg.all_joints = all_joints;
+			slave_msg.skeletons_n = all_joints.size();
+
+			publisher_slave_->publish(slave_msg);			
 
 			//delete pointer
+			responses_ptrs_.erase(find(responses_ptrs_.begin(), responses_ptrs_.end(), response));
+			delete response;
+
+			double delay = (this->get_clock()->now() - header.stamp).seconds();
+			avg_delay_total = (avg_delay_total*delay_window_total + delay);
+			delay_window_total++;
+			avg_delay_total /= delay_window_total;
 		}
 	}
 
@@ -285,8 +307,12 @@ namespace hpe_test {
 		
 		executor_ = executor;
 
+		responses_ptrs_ = {};
+
 		avg_delay = 0.0;
 		delay_window = 0;
+		avg_delay_total = 0.0; 
+		delay_window_total = 0;
 
 		futures_vector_queue_={};
 
@@ -308,6 +334,7 @@ namespace hpe_test {
 
 		clients_ = {};
 		publisher_boxes_ = this->create_publisher<sensor_msgs::msg::Image>("/boxes_" + name, 10);
+		publisher_slave_ = this->create_publisher<hpe_msgs::msg::Slave>("/slave_" + name, 10);
 
 		for(int i = 0; i < starting_workers; i++){
 			create_new_worker();
@@ -344,13 +371,11 @@ namespace hpe_test {
 			
 			subscription_ = this->create_subscription<sensor_msgs::msg::Image>("/webcam_" + name, 10, std::bind(&SlaveNode::callback, this, _1));
 		}
-
-		loop_node = std::make_shared<hpe_test::LoopNode>(name, &futures_vector_queue_, &queue_mutex_);
-		executor_->add_node(loop_node);
-		loop_node->start();
   	}
 
 	void SlaveNode::shutdown(){
+		RCLCPP_WARN(this->get_logger(), "Average FPS boxes: %f, total frames: %d", 1 / avg_delay, delay_window);
+		RCLCPP_WARN(this->get_logger(), "Average FPS total: %f, total frames: %d", 1 / avg_delay_total, delay_window_total);
 		RCLCPP_INFO(this->get_logger(), "Shutting down...");
 		running_ = false;
 
@@ -359,16 +384,14 @@ namespace hpe_test {
 			executor_->remove_node(webcam_node);
 		}
 
-		if(loop_node){
-			loop_node->shutdown();
-			executor_->remove_node(loop_node);
-		}
-
 		for (auto& w : workers_) {
+			w->shutdown();
+			w.reset();
 			executor_->remove_node(w);
 		}
 
 		RCLCPP_WARN(this->get_logger(), "Average FPS boxes: %f, total frames: %d", 1 / avg_delay, delay_window);
+		RCLCPP_WARN(this->get_logger(), "Average FPS total: %f, total frames: %d", 1 / avg_delay_total, delay_window_total);
 	}
 
 	SlaveNode::~SlaveNode(){
@@ -380,13 +403,13 @@ namespace hpe_test {
 			executor_->remove_node(webcam_node);
 		}
 
-		if(loop_node){
-			loop_node->shutdown();
-			executor_->remove_node(loop_node);
+		for (auto& w : workers_) {
+			w->shutdown();
+			executor_->remove_node(w);
 		}
 
-		for (auto& w : workers_) {
-			executor_->remove_node(w);
+		for(auto p : responses_ptrs_){
+			delete p;
 		}
 	}
 

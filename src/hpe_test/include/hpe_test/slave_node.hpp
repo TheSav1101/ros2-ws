@@ -17,7 +17,6 @@
 #include "hpe_msgs/msg/slave.hpp"
 #include "hpe_msgs/msg/box.hpp"
 #include "hpe_test/worker_node.hpp"
-#include "hpe_test/loop_node.hpp"
 #include "hpe_test/webcam_node.hpp"
 #include "hpe_test/data.hpp"
 #include "hpe_msgs/srv/calibration.hpp"
@@ -47,7 +46,9 @@ namespace hpe_test {
 			void compressedCallback(const sensor_msgs::msg::CompressedImage &msg);
 			void open_camera();
 			void calibrationService(const std::shared_ptr<hpe_msgs::srv::Calibration::Request> request [[maybe_unused]], std::shared_ptr<hpe_msgs::srv::Calibration::Response> response);
-			void response_received_callback(rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture future, Responses* response);
+			void all_response_received_callback(Responses* response);
+
+
 			rclcpp::executors::MultiThreadedExecutor* executor_;
 
 			//model numbers (see data.cpp)
@@ -66,6 +67,7 @@ namespace hpe_test {
 			//publishers
 			rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_boxes_;
 			rclcpp::Service<hpe_msgs::srv::Calibration>::SharedPtr calibration_service_;
+			rclcpp::Publisher<hpe_msgs::msg::Slave>::SharedPtr publisher_slave_;
 
 			//clients list
 			std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedPtr> clients_;
@@ -88,9 +90,9 @@ namespace hpe_test {
 			std::queue<std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture>> futures_vector_queue_;
 			std::mutex queue_mutex_;
 			std::atomic<bool> running_;
+			std::vector<Responses*> responses_ptrs_;
 
 			std::shared_ptr<hpe_test::WebcamNode> webcam_node;
-			std::shared_ptr<hpe_test::LoopNode> loop_node;
 			
 			//worker stuff
 			std::vector<std::shared_ptr<hpe_test::WorkerNode>> workers_;
@@ -99,6 +101,8 @@ namespace hpe_test {
 			//Metriche fps
 			int delay_window;
             double avg_delay;
+			double avg_delay_total; 
+			int delay_window_total;
 
 			//TODO sort this stuff...
 			int input_tensor_idx;

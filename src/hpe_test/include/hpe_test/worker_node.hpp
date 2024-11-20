@@ -19,6 +19,8 @@ namespace hpe_test {
         public:
             WorkerNode(std::string name, int model);
             ~WorkerNode();
+            void shutdown();
+            bool isReady();
 
         private:
             void setupTensors();
@@ -27,6 +29,8 @@ namespace hpe_test {
             int hpe_model_n = 0;
 
             rclcpp::Service<hpe_msgs::srv::Estimate>::SharedPtr service_;
+
+            std::atomic<bool> occupied_;
             
             std::unique_ptr<tflite::FlatBufferModel> model;
             std::unique_ptr<tflite::Interpreter> interpreter;

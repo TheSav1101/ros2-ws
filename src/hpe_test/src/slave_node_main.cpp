@@ -1,4 +1,14 @@
 #include <hpe_test/slave_node.hpp>
+#include <csignal>
+#include <atomic>
+
+std::atomic<bool> keep_running(true);
+
+void signal_handler(int signal) {
+    if (signal == SIGTERM || signal == SIGINT) {
+        keep_running.store(false);
+    }
+}
 
 int main(int argc, char *argv[]) {
 	if (argc < 5) {
@@ -17,14 +27,28 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 	rclcpp::init(argc, argv);
+
+	std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
+
 	try {
 		{
-			auto executor = rclcpp::executors::MultiThreadedExecutor();
+			auto options = rclcpp::ExecutorOptions();
+			//options.callback_priority = RMW_UROS_TASK_PRIORITY_HIGH;
+
+			auto executor = rclcpp::executors::MultiThreadedExecutor(options, 8);
 			auto node = std::make_shared<hpe_test::SlaveNode>(&executor, argv[1], argv[2], atoi(argv[3]), atoi(argv[4]), starting_workers, calibration_topic);
 			executor.add_node(node);
-			executor.spin();
+
+			rclcpp::Rate rate(30);
+			while (keep_running.load() && rclcpp::ok()) {
+				executor.spin_some();
+				rate.sleep();
+			}
+			node->shutdown();
+			executor.spin_some();
 			executor.cancel();
-			node->shutdown();	
+			
 		}
 		rclcpp::shutdown();
 		std::cout << "ROS2 shutdown complete" << std::endl;

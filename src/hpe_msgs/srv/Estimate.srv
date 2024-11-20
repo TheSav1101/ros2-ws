@@ -1,3 +1,5 @@
 hpe_msgs/Detection detection
+int32 request_number
 ---
 hpe_msgs/Hpe2d hpe2d
+int32 request_number

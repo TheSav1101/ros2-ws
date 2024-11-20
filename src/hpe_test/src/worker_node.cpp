@@ -7,21 +7,18 @@ using std::placeholders::_2;
 namespace hpe_test{
 		
 	void WorkerNode::service(const std::shared_ptr<hpe_msgs::srv::Estimate::Request> request, std::shared_ptr<hpe_msgs::srv::Estimate::Response> response) {
+		occupied_ = true;
 		auto start = this->get_clock()->now();
 		try {
 			cv_ptr = cv_bridge::toCvCopy(request->detection.image, sensor_msgs::image_encodings::BGR8);
 		} catch (cv_bridge::Exception &e) {
-
-			RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s",
-									e.what());
+			RCLCPP_ERROR(this->get_logger(), "ERROR: cv_bridge exception %s", e.what());
 		}
 
 		memcpy(input_data, cv_ptr->image.data, input_size * sizeof(uint8_t));
 
 		if (interpreter->Invoke() != kTfLiteOk)
-			RCLCPP_ERROR(
-					this->get_logger(),
-					"ERROR: Something went wrong while invoking the interpreter...");
+			RCLCPP_ERROR(this->get_logger(), "ERROR: Something went wrong while invoking the interpreter...");
 
 
 		std::vector<std::vector<float>> out(output_dims->data[3]);
@@ -34,8 +31,8 @@ namespace hpe_test{
 		
 		//Deal with warping...
 		for(size_t i = 0; i < out[0].size(); i++){
-			out[0][i] = (out[0][i]*(float)request->detection.box.height + (float)request->detection.box.y)/(float)request->detection.box.img_height;
-			out[1][i] = (out[1][i]*(float)request->detection.box.width  + (float)request->detection.box.x)/(float)request->detection.box.img_width;
+			out[0][i] = (out[0][i]*(float)request->detection.box.height + (float)request->detection.box.y);// /(float)request->detection.box.img_height;
+			out[1][i] = (out[1][i]*(float)request->detection.box.width  + (float)request->detection.box.x);// /(float)request->detection.box.img_width;
 		}
 
 		response->hpe2d = hpe_msgs::msg::Hpe2d();
@@ -45,13 +42,14 @@ namespace hpe_test{
 		response->hpe2d.joints.x = out[1];
 		response->hpe2d.joints.confidence = out[2];
 		response->hpe2d.joints.dim = output_dims->data[2];
+		response->request_number = request->request_number;
 		
 		double delay = (this->get_clock()->now() - start).seconds();
         avg_delay = (avg_delay*delay_window + delay);
         delay_window++;
         avg_delay /= delay_window;
-		RCLCPP_INFO(this->get_logger(), "Service %d processing completed", delay_window);
-
+		RCLCPP_INFO(this->get_logger(), "Service %d processing completed", request->request_number);
+		occupied_ = false;
 	}
 
 	void WorkerNode::setupTensors() {
@@ -111,16 +109,25 @@ namespace hpe_test{
 	}
 
 	WorkerNode::WorkerNode(std::string name, int model_): Node("worker_" + name) {
+		occupied_ = true;
 		hpe_model_n = model_;
 		setupTensors();
 		delay_window = 0;
 		avg_delay = 0.0;
 		service_ = this->create_service<hpe_msgs::srv::Estimate>("estimate" + name, std::bind(&WorkerNode::service, this, _1, _2));
 		RCLCPP_INFO(this->get_logger(), "worker_%s is ready", name.c_str());
+		occupied_ = false;
+	}
+
+	void WorkerNode::shutdown(){
+		RCLCPP_WARN(this->get_logger(), "Average FPS: %f, total frames: %d", 1/avg_delay, delay_window);
+	}
+
+	bool WorkerNode::isReady(){
+		return !occupied_;
 	}
 
 	WorkerNode::~WorkerNode(){
-		RCLCPP_WARN(this->get_logger(), "Average FPS: %f, total frames: %d", 1/avg_delay, delay_window);
 	}
 };
 

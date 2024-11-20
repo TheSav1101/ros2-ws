@@ -11,11 +11,14 @@ namespace hpe_test{
         Responses(int size);
         ~Responses();
         bool isReady();
-        void add(hpe_msgs::msg::Hpe2d& msg);        
+        bool add(hpe_msgs::msg::Hpe2d& msg);        
         std::vector<hpe_msgs::msg::Hpe2d> get();
     private:
         std::vector<hpe_msgs::msg::Hpe2d> responses;
         int size_;
+
+        //sinceramente spero non serva ma non si sa mai
+        std::mutex mutex_;
 
     };
 }
