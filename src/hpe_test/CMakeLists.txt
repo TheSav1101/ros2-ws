@@ -57,7 +57,7 @@ include_directories(
 add_executable(worker src/worker_node_main.cpp src/worker_node.cpp src/data.cpp)
 add_executable(visualizer src/visualizer_node_main.cpp src/visualizer_node.cpp)
 add_executable(master src/master_node_main.cpp src/master_node.cpp src/calibration.cpp)
-add_executable(master_single src/master_node_single_main.cpp src/master_node_single.cpp src/calibration.cpp)
+add_executable(master_single src/master_node_single_main.cpp src/master_node_single.cpp src/calibration.cpp src/visualizer_node.cpp)
 add_executable(webcam src/webcam_node_main.cpp src/webcam_node.cpp)
 add_executable(slave src/slave_node_main.cpp src/slave_node.cpp src/worker_node.cpp src/webcam_node.cpp src/data.cpp src/responses.cpp)
 add_executable(slave_single src/slave_node_single_main.cpp src/slave_node_single.cpp src/webcam_node.cpp src/data.cpp)

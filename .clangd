@@ -1,0 +1,7 @@
+CompileFlags:
+  Add:
+    - "--include-directory=/home/emanuele/ros2-ws/src/hpe_test/include"
+    - "--include-directory=/opt/ros/jazzy-full/include/rclcpp/rclcpp"
+Diagnostics:
+  MissingIncludes: Strict
+  UnusedIncludes: Strict

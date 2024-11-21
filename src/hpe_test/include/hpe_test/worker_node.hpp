@@ -1,14 +1,15 @@
 #ifndef HPE_TEST__WORKER_NODE_HPP_
 #define HPE_TEST__WORKER_NODE_HPP_
 
-#include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <rclcpp/rclcpp.hpp>
 #include <opencv4/opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.hpp>
 #include <tensorflow/lite/interpreter.h>
 #include <tensorflow/lite/kernels/register.h>
 #include <tensorflow/lite/model.h>
 #include "hpe_msgs/srv/estimate.hpp"
+#include "hpe_test/data.hpp"
 
 namespace hpe_test {
 

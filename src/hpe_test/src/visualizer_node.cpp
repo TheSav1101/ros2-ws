@@ -5,11 +5,9 @@ using std::placeholders::_1;
 namespace hpe_test{
     void VisualizerNode::callback2d(const std::shared_ptr<hpe_msgs::msg::Slave> hpe_result)
     {
-        RCLCPP_INFO(this->get_logger(), "Working on a new image...");
-
         std::vector<Keypoint_score> keypoints_score = keypoints_scores_from_msgs(hpe_result);
 
-        std::vector<Keypoint> kp_viz = keypoints_and_edges_for_display(keypoints_score, image.height, image.width, 0.4);
+        std::vector<Keypoint> kp_viz = keypoints_and_edges_for_display(keypoints_score, 0.4);
 
         try
         {
@@ -37,7 +35,6 @@ namespace hpe_test{
         avg_delay = (avg_delay*delay_window + delay);
         delay_window++;
         avg_delay /= delay_window;
-        RCLCPP_INFO(this->get_logger(), "Average delay: %f, window: %d", avg_delay, delay_window);
     }
 
     void VisualizerNode::image_callback(sensor_msgs::msg::Image msg)
@@ -58,15 +55,15 @@ namespace hpe_test{
         return kpts;
     }
 
-    std::vector<Keypoint> VisualizerNode::keypoints_and_edges_for_display(const std::vector<Keypoint_score> &keypoints_with_scores, int height, int width, float keypoint_threshold){
+    std::vector<Keypoint> VisualizerNode::keypoints_and_edges_for_display(const std::vector<Keypoint_score> &keypoints_with_scores, float keypoint_threshold){
 
         std::vector<Keypoint> keypoints_all;
 
 
         for (size_t i = 0; i < keypoints_with_scores.size(); ++i)
         {
-            float abs_x = keypoints_with_scores[i].x * width;
-            float abs_y = keypoints_with_scores[i].y * height;
+            float abs_x = keypoints_with_scores[i].x; //* width;
+            float abs_y = keypoints_with_scores[i].y; //* height;
 
             if (keypoints_with_scores[i].score > keypoint_threshold)
             {
@@ -84,7 +81,7 @@ namespace hpe_test{
     VisualizerNode::VisualizerNode(std::string name) : Node("visualizer_" + name){
         delay_window = 0;
         avg_delay = 0.0;
-        publisher_ = this->create_publisher<sensor_msgs::msg::Image>("/hpe_visual/" + name, 10);
+        publisher_ = this->create_publisher<sensor_msgs::msg::Image>("/hpe_visual_" + name, 10);
 
         subscription_slave_ = this->create_subscription<hpe_msgs::msg::Slave>(
             "/slave_" + name, 10, std::bind(&VisualizerNode::callback2d, this, _1));

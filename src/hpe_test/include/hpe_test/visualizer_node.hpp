@@ -32,7 +32,7 @@ namespace hpe_test {
             ~VisualizerNode();
             void callback2d(const std::shared_ptr<hpe_msgs::msg::Slave> hpe_result);
             void image_callback(sensor_msgs::msg::Image msg);
-            std::vector<Keypoint> keypoints_and_edges_for_display( const std::vector<Keypoint_score> &keypoints_with_scores, int height, int width, float keypoint_threshold);
+            std::vector<Keypoint> keypoints_and_edges_for_display( const std::vector<Keypoint_score> &keypoints_with_scores, float keypoint_threshold);
             std::vector<Keypoint_score> keypoints_scores_from_msgs(const std::shared_ptr<hpe_msgs::msg::Slave> msg);
 
         private:

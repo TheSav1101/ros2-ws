@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
 	try {
 		{
 			rclcpp::executors::MultiThreadedExecutor executor;
-			auto node = std::make_shared<hpe_test::MasterNodeSingle>(name);
+			auto node = std::make_shared<hpe_test::MasterNodeSingle>(name, &executor);
 			executor.add_node(node);
 			executor.spin();
 			node->shutdown();

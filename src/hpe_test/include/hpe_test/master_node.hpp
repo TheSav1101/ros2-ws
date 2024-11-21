@@ -12,7 +12,6 @@
 #include "hpe_msgs/srv/calibration.hpp"
 #include <hpe_test/calibration.hpp>
 
-
 namespace hpe_test {
 
 	class MasterNode : public rclcpp::Node {
@@ -30,7 +29,7 @@ namespace hpe_test {
 			void filterFeedbacks();
 			void triangulate_all();
 			float computeWcj(float s_cj, Eigen::Vector3f joint_3d, Eigen::Matrix4f extrinsic_matrix);
-			
+
 			Eigen::Vector3f triangulateWithoutWeights(const std::vector<Eigen::Matrix<float, 2, 3>>& A_list, const std::vector<Eigen::Matrix<float, 2, 1>>& B_list);
 			Eigen::Vector3f iterateWithWeights(std::vector<Eigen::Matrix<float, 2, 3>>& A_list, std::vector<Eigen::Matrix<float, 2, 1>>& B_list, const std::vector<float>& confidences);
 			std::vector<Eigen::Matrix<float, 2, 3>> buildA_list(int joint_n, std::vector<int> cameras, std::vector<int> skeletons);
