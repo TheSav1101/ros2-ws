@@ -6,7 +6,9 @@ using std::placeholders::_2;
 
 namespace hpe_test {
 
-MasterNodeSingle::MasterNodeSingle(std::string name, rclcpp::executors::MultiThreadedExecutor* executor) : Node(name) {
+MasterNodeSingle::MasterNodeSingle(
+    std::string name, rclcpp::executors::MultiThreadedExecutor *executor)
+    : Node(name) {
   avg_delay = 0.0;
   delay_window = 0;
   last_marker_count_ = 0;
@@ -20,13 +22,13 @@ MasterNodeSingle::MasterNodeSingle(std::string name, rclcpp::executors::MultiThr
   slaves_feedback_ = {};
   scan_for_slaves();
   scanner_ = this->create_wall_timer(
-      std::chrono::seconds(5),
+      std::chrono::seconds(2),
       std::bind(&MasterNodeSingle::scan_for_slaves, this));
   marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
       "master_node_output", 10);
 
   loop_thread = std::thread(&MasterNodeSingle::loop, this);
-  loop_thread.detach();
+  // loop_thread.detach();
 }
 
 void MasterNodeSingle::shutdown() {

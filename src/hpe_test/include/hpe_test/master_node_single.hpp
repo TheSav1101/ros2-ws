@@ -15,13 +15,13 @@
 #include <vector>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
-#include "hpe_test/visualizer_node.hpp"
 
 namespace hpe_test {
 
 class MasterNodeSingle : public rclcpp::Node {
 public:
-  MasterNodeSingle(std::string name, rclcpp::executors::MultiThreadedExecutor* executor);
+  MasterNodeSingle(std::string name,
+                   rclcpp::executors::MultiThreadedExecutor *executor);
   ~MasterNodeSingle();
   void shutdown();
 
@@ -43,7 +43,7 @@ private:
                     std::vector<float> &avg_conf);
   void clear_markers();
 
-  rclcpp::executors::MultiThreadedExecutor* executor_;
+  rclcpp::executors::MultiThreadedExecutor *executor_;
   std::vector<std::shared_ptr<hpe_test::VisualizerNode>> visualizers;
 
   // Linear algebra matrices

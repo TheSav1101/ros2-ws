@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(hpe_test)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+    add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
 # find dependencies
@@ -61,7 +61,7 @@ add_executable(master_single src/master_node_single_main.cpp src/master_node_sin
 add_executable(webcam src/webcam_node_main.cpp src/webcam_node.cpp)
 add_executable(slave src/slave_node_main.cpp src/slave_node.cpp src/worker_node.cpp src/webcam_node.cpp src/data.cpp src/responses.cpp)
 add_executable(slave_single src/slave_node_single_main.cpp src/slave_node_single.cpp src/webcam_node.cpp src/data.cpp)
-
+add_executable(markers src/markers.cpp)
 # Link libraries
 message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflowlite")
 list(APPEND tensorflowlite_LIBRARIES "/usr/lib/libtensorflowlite.so")
@@ -95,6 +95,8 @@ target_link_libraries(master_single ${tf2_LIBRARIES})
 target_link_libraries(master_single ${tf2_geometry_msgs_LIBRARIES})
 target_link_libraries(master_single ${visualization_msgs_LIBRARIES})
 
+target_link_libraries(markers ${visualization_msgs_LIBRARIES})
+
 target_link_libraries(visualizer ${OpenCV_LIBS})
 target_link_libraries(visualizer ${cv_bridge_LIBRARIES})
 target_link_libraries(visualizer ${sensor_msgs_LIBRARIES})
@@ -121,6 +123,8 @@ ament_target_dependencies(master_single rclcpp std_msgs visualization_msgs senso
 ament_target_dependencies(webcam rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 ament_target_dependencies(slave rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge tf2 tf2_geometry_msgs)
 ament_target_dependencies(slave_single rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge tf2 tf2_geometry_msgs)
+ament_target_dependencies(markers rclcpp visualization_msgs)
+
 
 install(TARGETS
   visualizer
@@ -129,21 +133,22 @@ install(TARGETS
   slave_single
   master_single
   webcam
+  markers
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY include/
   DESTINATION include/)
 
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
-  set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
+    find_package(ament_lint_auto REQUIRED)
+    # the following line skips the linter which checks for copyrights
+    # comment the line when a copyright and license is added to all source files
+    set(ament_cmake_copyright_FOUND TRUE)
+    # the following line skips cpplint (only works in a git repo)
+    # comment the line when this package is in a git repo and when
+    # a copyright and license is added to all source files
+    set(ament_cmake_cpplint_FOUND TRUE)
+    ament_lint_auto_find_test_dependencies()
 endif()
 
 ament_package()
