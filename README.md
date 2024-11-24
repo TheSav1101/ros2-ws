@@ -10,10 +10,16 @@ TODO
 
 # Raspberry pi setup guide:
 ---
-Install Ubuntu 24.04 LTS using rpi-imager and ssh into the raspbery pi, then
+Install Ubuntu 24.04 server LTS using rpi-imager and ssh into the raspbery pi, then perform a minimal graphical installation in order to get the necesary packages for GPU support.
 
-    sudo apt update
-    sudo apt upgrade -y
+    sudo apt update && sudo apt upgrade -y
+    sudo apt install ubuntu-desktop-minimal -y
+    sudo apt install lightdm -y
+    sudo systemctl set-default graphical.target
+    sudo reboot
+
+Clone this repository
+
     git clone https://github.com/TheSav1101/ros2-ws.git
 
 Install opencv4 and other dependencies
