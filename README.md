@@ -60,7 +60,9 @@ Install GPU acceleration support:
     sudo apt upgrade -y
     sudo apt install cmake git build-essential clang -y
     sudo apt install mesa-utils vulkan-tools clinfo -y
+    sudo apt install libegl-dev libegl1-mesa-dev libx11-dev ocl-icd-dev -y
     sudo apt-get install opencl-headers ocl-icd-opencl-dev libabsl-dev libruy-dev libpthreadpool-dev libxnnpack-dev -y
+    sudo apt install xserver-xorg-video-dummy -y
 
 Check if previous libs are working
 
@@ -82,7 +84,8 @@ Run configuration and set all defaults. Note that you have to invoke bazelisk be
 Run builds with bazelisk
 
     bazelisk build -c opt --config=monolithic //tensorflow/lite:libtensorflowlite.so
-    bazelisk build -c opt --config=monolithic //tensorflow/lite/delegates/gpu:libtensorflowlite_gpu_delegate.so
+    bazelisk build -c opt --config=monolithic --linkopt=-lEGL --linkopt=-lGLESv2 //tensorflow/lite/delegates/gpu:libtensorflowlite_gpu_delegate.so
+
 
 Install libtensorflowlite.so and the gpu delegate with the provided script
 

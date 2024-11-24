@@ -61,6 +61,8 @@ private:
   const float MAX_TIME_DIFF = 0.25;
   const int max_iterations = 3;
   const int max_joints = 17;
+  const float D_MIN = 1.5;
+  const float D_MAX = 3;
 
   std::vector<hpe_msgs::msg::Slave> filtered_feedbacks;
   std::vector<int> camera_indices;
