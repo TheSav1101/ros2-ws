@@ -1,74 +1,88 @@
 # Real-time multi-camera 3D human pose estimation on edge devices
+---
 
 In this workspace I leave the implementation of the code used in my thesis "Real-time multi-camera 3D human pose estimation on edge devices". Tests are made using a newtork of raspberry pi 5.
 
-## Requirements:
+# Usage
+---
 
-    - ros2 jazzy
-    - libtensorflow_lite, to be installed in "/usr/lib" with include files in "/usr/include/tensorflow"
-    - cv_bridge
-    - opencv4
-    - eigen
+TODO
 
-## Usage
+# Raspberry pi setup guide:
+---
+Install Ubuntu 24.04 LTS using rpi-imager and ssh into it, then
+
+    sudo apt update
+    sudo apt upgrade -y
+    git clone https://github.com/TheSav1101/ros2-ws.git
+
+Install opencv4 and other dependencies
+
+    sudo apt install libopencv-dev python3-opencv libflatbuffers-dev nlohmann-json3-dev -y
+
+Install the latest version of ros2-jazzy and test using the premade examples, you can follow this guide https://docs.ros.org/en/jazzy/Installation.html
+
+    sudo apt install software-properties-common
+    sudo add-apt-repository universe
+
+    sudo apt update && sudo apt install curl -y
+    sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+    sudo apt update
+    sudo apt upgrade -y
+    sudo apt install ros-jazzy-desktop-full -y
+    sudo apt-get install colcon -y
+
+Install bazel
+
+    sudo apt install -y golang
+    go install github.com/bazelbuild/bazelisk@latest
+
+Add these lines to ~/.bashrc and restart bash aftewards
+
+    source /opt/ros/jazzy/setup.bash
+    source ~/ros2-ws/install/setup.bash
+    export PATH=$PATH:$(go env GOPATH)/bin
+    export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
+Install GPU acceleration support:
+
+    sudo apt update
+    sudo apt upgrade -y
+    sudo apt install cmake git build-essential clang -y
+    sudo apt install mesa-utils vulkan-tools clinfo -y
+    sudo apt-get install opencl-headers ocl-icd-opencl-dev libabsl-dev libruy-dev libpthreadpool-dev libxnnpack-dev -y
+
+Check if previous libs are working
+
+    glxinfo | grep "OpenGL"
+    vulkaninfo | grep "Vulkan"
+    clinfo
+
+Download and build tflite
+
+    git clone https://github.com/tensorflow/tensorflow.git
+    cd tensorflow
+    git checkout v2.17.0 //Required
+
+Run configuration and set all defaults. Note that you have to invoke bazelisk before it in order to download the package or it won't work
 
 
-## Raspberry pi setup guide:
+    ./configure
 
-1. Install Ubuntu 24.10 using rpi-imager
-2. Install opencv4 and eigen if needed
-3. Install the latest version of ros2-jazzy and test using the premade examples
-4. Install TFlite with GPU acceleration support:
-'''
-sudo apt update
-sudo apt upgrade -y
-sudo apt install cmake git build-essential clang
-sudo apt install mesa-utils vulkan-tools clinfo
-sudo apt-get install opencl-headers ocl-icd-opencl-dev libabsl-dev libruy-dev libpthreadpool-dev libxnnpack-dev
-'''
-'''
-check if previous libs are working
-'''
-glxinfo | grep "OpenGL"
-vulkaninfo | grep "Vulkan"
-clinfo
-'''
-download and build tflite
-'''
-git clone https://github.com/tensorflow/tensorflow.git
-cd tensorflow
-git checkout v2.18.0 //or whatever new version you like
-'''
-Patch file ~/tensorflow/tensorflow/lite/tools/cmake/modules/ml_dtypes/CMakeLists.txt
-'''
--target_include_directories(ml_dtypes INTERFACE
-- "${ML_DTYPES_SOURCE_DIR}"
-- "${ML_DTYPES_SOURCE_DIR}/ml_dtypes")
-+target_include_directories(ml_dtypes INTERFACE
-+  "$<BUILD_INTERFACE:${ML_DTYPES_SOURCE_DIR}>" "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-+  "$<BUILD_INTERFACE:${ML_DTYPES_SOURCE_DIR}/ml_dtypes>" "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/ml_dtypes>")
-'''
+Run builds with bazelisk
 
-build
+    bazelisk build -c opt --config=monolithic //tensorflow/lite:libtensorflowlite.so
+    bazelisk build -c opt --config=monolithic //tensorflow/lite/delegates/gpu:libtensorflowlite_gpu_delegate.so
 
-'''
-cd
-mkdir tflite_build
-cd tflite_build
+Install libtensorflowlite.so and the gpu delegate with the provided script
 
-cmake -D TFLITE_ENABLE_GPU=ON \
-  -D FETCHCONTENT_FULLY_DISCONNECTED=OFF \
-  -D BUILD_SHARED_LIBS=ON \
-  -D TFLITE_ENABLE_INSTALL=ON \
-  -D CMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-  -D TFLITE_ENABLE_XNNPACK=ON \
-  -D CMAKE_BUILD_TYPE=Release \
-  -D CMAKE_INSTALL_PREFIX=/usr/local \
-  -D CMAKE_C_COMPILER=clang \
-  -D CMAKE_CXX_COMPILER=clang++ \
-  -D CMAKE_SYSTEM_PROCESSOR=aarch64 \
-  ../tensorflow/tensorflow/lite
+    cd ~/ros2-ws
+    ./install_tflite.sh
 
-make -j $(nproc)
-sudo make install
-'''
+And in the end you can:
+
+    colcon build --packages-select hpe_msgs
+    colcon build
