@@ -106,7 +106,6 @@ void MasterNodeSingle::triangulate_all() {
     avg_conf.push_back(avg_conf_);
   }
 
-  clear_markers();
   visualize_3d(joints3d, avg_conf);
 }
 
@@ -195,24 +194,6 @@ void MasterNodeSingle::visualize_3d(std::vector<Eigen::Vector3f> &joints,
   // RCLCPP_INFO(this->get_logger(), "Added %ld markers", last_marker_count_);
 }
 
-void MasterNodeSingle::clear_markers() {
-  visualization_msgs::msg::MarkerArray marker_array;
-
-  for (size_t i = 0; i < last_marker_count_; ++i) {
-    visualization_msgs::msg::Marker marker;
-    marker.header.frame_id = "world";
-    marker.header.stamp = this->get_clock()->now();
-    marker.ns = "joints";
-    marker.id = static_cast<int>(i);
-    marker.action = visualization_msgs::msg::Marker::DELETE;
-
-    marker_array.markers.push_back(marker);
-  }
-
-  marker_pub_->publish(marker_array);
-  last_marker_count_ = 0;
-}
-
 float MasterNodeSingle::computeWcj(float s_cj, Eigen::Vector3f joint_3d,
                                    Eigen::Matrix4f extrinsic_matrix) {
   Eigen::Matrix3f R = extrinsic_matrix.block<3, 3>(0, 0);
@@ -252,18 +233,22 @@ MasterNodeSingle::iterateWithWeights(const std::vector<float> &confidences) {
       weights.push_back(W_cj);
     }
 
-    Eigen::MatrixXf W(confidences.size(), confidences.size());
-    for (size_t i = 0; i < weights.size(); i++) {
+    Eigen::MatrixXf W(confidences.size() * 2, confidences.size() * 2);
+    for (size_t i = 0; i < 2 * weights.size(); i += 2) {
       W(i, i) = weights[i];
+      W(i + 1, i + 1) = weights[i];
     }
 
     // A^T W A
     Eigen::MatrixXf AtWA = A_.transpose() * W * A_;
+    RCLCPP_WARN(this->get_logger(), "B");
 
     // A^T W B
     Eigen::VectorXf AtWB = A_.transpose() * W * B_;
+    RCLCPP_WARN(this->get_logger(), "C");
 
     Eigen::VectorXf X = AtWA.ldlt().solve(AtWB);
+    RCLCPP_WARN(this->get_logger(), "D");
 
     /*
     //Old implementation, it is wrong...

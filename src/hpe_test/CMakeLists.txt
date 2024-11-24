@@ -42,13 +42,10 @@ find_package(nlohmann_json REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
-
-
 # Include directories
 include_directories(
   include
   ${tensorflowlite_INCLUDE_DIRS}
-  #${tensorflowlite_gpu_delegate_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${cv_bridge_INCLUDE_DIRS}
   ${std_msgs_INCLUDE_DIRS}
@@ -111,6 +108,7 @@ target_link_libraries(slave ${cv_bridge_LIBRARIES})
 target_link_libraries(slave ${sensor_msgs_LIBRARIES})
 target_link_libraries(slave ${std_msgs_LIBRARIES})
 target_link_libraries(slave ${nlohmann_json_LIBRARIES})
+
 
 target_link_libraries(slave_single ${tensorflowlite_LIBRARIES})
 target_link_libraries(slave_single ${OpenCV_LIBS})

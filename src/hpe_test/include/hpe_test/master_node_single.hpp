@@ -41,7 +41,6 @@ private:
   void buildAB_lists(int joint_n);
   void visualize_3d(std::vector<Eigen::Vector3f> &joints,
                     std::vector<float> &avg_conf);
-  void clear_markers();
 
   rclcpp::executors::MultiThreadedExecutor *executor_;
   std::vector<std::shared_ptr<hpe_test::VisualizerNode>> visualizers;
@@ -59,7 +58,7 @@ private:
   std::atomic<bool> running_;
   std::thread loop_thread;
 
-  const float MAX_TIME_DIFF = 1;
+  const float MAX_TIME_DIFF = 0.25;
   const int max_iterations = 3;
   const int max_joints = 17;
 
