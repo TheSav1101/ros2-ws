@@ -23,6 +23,7 @@ find_package(sensor_msgs REQUIRED)
 #message(WARNING "sensor_msgs_INCLUDE_DIRS: ${sensor_msgs_INCLUDE_DIRS}")
 
 find_package(tensorflowlite REQUIRED)
+#find_package(tensorflowlite_gpu_delegate REQUIRED)
 #list(APPEND tensorflowlite_INCLUDE_DIRS "/usr/include/tensorflow")
 #message(WARNING "MANUALLY ADDED INCLUDE DIRECTORIES FOR tensorflowlite")
 #message(WARNING "tensorflowlite_INCLUDE_DIRS: ${tensorflowlite_INCLUDE_DIRS}")
@@ -47,6 +48,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 include_directories(
   include
   ${tensorflowlite_INCLUDE_DIRS}
+  #${tensorflowlite_gpu_delegate_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${cv_bridge_INCLUDE_DIRS}
   ${std_msgs_INCLUDE_DIRS}
@@ -103,6 +105,7 @@ target_link_libraries(visualizer ${sensor_msgs_LIBRARIES})
 target_link_libraries(visualizer ${std_msgs_LIBRARIES})
 
 target_link_libraries(slave ${tensorflowlite_LIBRARIES})
+target_link_libraries(slave ${tensorflowlite_gpu_delegate_LIBRARIES})
 target_link_libraries(slave ${OpenCV_LIBS})
 target_link_libraries(slave ${cv_bridge_LIBRARIES})
 target_link_libraries(slave ${sensor_msgs_LIBRARIES})

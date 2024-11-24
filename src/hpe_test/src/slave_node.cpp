@@ -263,6 +263,9 @@ void SlaveNode::setupTensors() {
   tflite::ops::builtin::BuiltinOpResolver resolver;
   tflite::InterpreterBuilder builder(*model, resolver);
 
+  auto *delegate = TfLiteGpuDelegateV2Create(/*default options=*/nullptr);
+  builder.AddDelegate(delegate);
+
   // RCLCPP_INFO(this->get_logger(), "Building interpreter...");
   builder(&interpreter);
 
