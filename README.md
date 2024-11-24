@@ -66,6 +66,7 @@ cmake -D TFLITE_ENABLE_GPU=ON \
   -D CMAKE_INSTALL_PREFIX=/usr/local \
   -D CMAKE_C_COMPILER=clang \
   -D CMAKE_CXX_COMPILER=clang++ \
+  -D CMAKE_SYSTEM_PROCESSOR=aarch64 \
   ../tensorflow/tensorflow/lite
 
 make -j $(nproc)

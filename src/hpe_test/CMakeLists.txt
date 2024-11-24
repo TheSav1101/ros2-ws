@@ -23,7 +23,7 @@ find_package(sensor_msgs REQUIRED)
 #message(WARNING "sensor_msgs_INCLUDE_DIRS: ${sensor_msgs_INCLUDE_DIRS}")
 
 find_package(tensorflowlite REQUIRED)
-list(APPEND tensorflowlite_INCLUDE_DIRS "/usr/include/tensorflow")
+#list(APPEND tensorflowlite_INCLUDE_DIRS "/usr/include/tensorflow")
 #message(WARNING "MANUALLY ADDED INCLUDE DIRECTORIES FOR tensorflowlite")
 message(WARNING "tensorflowlite_INCLUDE_DIRS: ${tensorflowlite_INCLUDE_DIRS}")
 
@@ -63,8 +63,8 @@ add_executable(slave src/slave_node_main.cpp src/slave_node.cpp src/worker_node.
 add_executable(slave_single src/slave_node_single_main.cpp src/slave_node_single.cpp src/webcam_node.cpp src/data.cpp)
 add_executable(markers src/markers.cpp)
 # Link libraries
-message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflowlite")
-list(APPEND tensorflowlite_LIBRARIES "/usr/lib/libtensorflowlite.so")
+#message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflowlite")
+#list(APPEND tensorflowlite_LIBRARIES "/usr/lib/libtensorflowlite.so")
 message(WARNING "tensorflowlite_LIBRARIES: ${tensorflowlite_LIBRARIES}")
 
 

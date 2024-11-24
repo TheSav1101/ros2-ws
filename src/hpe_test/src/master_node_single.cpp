@@ -1,3 +1,4 @@
+#include "Eigen/Core"
 #include "hpe_test/visualizer_node.hpp"
 #include <hpe_test/master_node_single.hpp>
 
@@ -251,6 +252,22 @@ MasterNodeSingle::iterateWithWeights(const std::vector<float> &confidences) {
       weights.push_back(W_cj);
     }
 
+    Eigen::MatrixXf W(confidences.size(), confidences.size());
+    for (size_t i = 0; i < weights.size(); i++) {
+      W(i, i) = weights[i];
+    }
+
+    // A^T W A
+    Eigen::MatrixXf AtWA = A_.transpose() * W * A_;
+
+    // A^T W B
+    Eigen::VectorXf AtWB = A_.transpose() * W * B_;
+
+    Eigen::VectorXf X = AtWA.ldlt().solve(AtWB);
+
+    /*
+    //Old implementation, it is wrong...
+
     Eigen::MatrixXf A_weighted = A_;
     Eigen::VectorXf B_weighted = B_;
 
@@ -262,6 +279,7 @@ MasterNodeSingle::iterateWithWeights(const std::vector<float> &confidences) {
     }
 
     X = A_weighted.colPivHouseholderQr().solve(B_weighted);
+    */
   }
 
   return X;
@@ -296,6 +314,7 @@ void MasterNodeSingle::scan_for_slaves() {
       RCLCPP_INFO(this->get_logger(), "From node: %s", node_name.c_str());
 
       int index = subscribers_.size();
+      slaves_feedback_.push_back(hpe_msgs::msg::Slave());
 
       auto sub = this->create_subscription<hpe_msgs::msg::Slave>(
           topic_name, 10,
@@ -304,7 +323,6 @@ void MasterNodeSingle::scan_for_slaves() {
           });
       subscribers_.push_back(sub);
       subscribed_topics_names_.insert(topic_name);
-      slaves_feedback_.push_back(hpe_msgs::msg::Slave());
 
       std::string calibration_service_name = "/calibration_" + node_name;
       requestCalibration(calibration_service_name);
