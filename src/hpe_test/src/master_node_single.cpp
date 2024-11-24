@@ -212,7 +212,7 @@ float MasterNodeSingle::computeWcj(float s_cj, Eigen::Vector3f joint_3d,
     d_cj = 0;
   }
 
-  float W_cj = s_cj * ((1.0 / d_cj) + cos_theta_cj * cos_theta_cj) / 2;
+  float W_cj = s_cj * (d_cj + (cos_theta_cj * cos_theta_cj)) / 2;
 
   return W_cj;
 }
