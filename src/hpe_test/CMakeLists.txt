@@ -25,7 +25,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(tensorflowlite REQUIRED)
 #list(APPEND tensorflowlite_INCLUDE_DIRS "/usr/include/tensorflow")
 #message(WARNING "MANUALLY ADDED INCLUDE DIRECTORIES FOR tensorflowlite")
-message(WARNING "tensorflowlite_INCLUDE_DIRS: ${tensorflowlite_INCLUDE_DIRS}")
+#message(WARNING "tensorflowlite_INCLUDE_DIRS: ${tensorflowlite_INCLUDE_DIRS}")
 
 find_package(OpenCV REQUIRED)
 #message(WARNING "OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
@@ -65,7 +65,7 @@ add_executable(markers src/markers.cpp)
 # Link libraries
 #message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflowlite")
 #list(APPEND tensorflowlite_LIBRARIES "/usr/lib/libtensorflowlite.so")
-message(WARNING "tensorflowlite_LIBRARIES: ${tensorflowlite_LIBRARIES}")
+#message(WARNING "tensorflowlite_LIBRARIES: ${tensorflowlite_LIBRARIES}")
 
 
 target_link_libraries(worker ${tensorflowlite_LIBRARIES})
