@@ -10,7 +10,7 @@ TODO
 
 # Raspberry pi setup guide:
 ---
-Install Ubuntu 24.04 LTS using rpi-imager and ssh into it, then
+Install Ubuntu 24.04 LTS using rpi-imager and ssh into the raspbery pi, then
 
     sudo apt update
     sudo apt upgrade -y
@@ -18,7 +18,14 @@ Install Ubuntu 24.04 LTS using rpi-imager and ssh into it, then
 
 Install opencv4 and other dependencies
 
-    sudo apt install libopencv-dev python3-opencv libflatbuffers-dev nlohmann-json3-dev -y
+    sudo apt install libopencv-dev python3-opencv nlohmann-json3-dev -y
+    git clone https://github.com/google/flatbuffers.git -b v24.3.25
+    cd flatbuffers
+    mkdir build
+    cd build
+    cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+    make -j$(nproc)
+    sudo make install
 
 Install the latest version of ros2-jazzy and test using the premade examples, you can follow this guide https://docs.ros.org/en/jazzy/Installation.html
 

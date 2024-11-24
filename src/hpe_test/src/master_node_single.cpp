@@ -1,5 +1,3 @@
-#include "Eigen/Core"
-#include "hpe_test/visualizer_node.hpp"
 #include <hpe_test/master_node_single.hpp>
 
 using std::placeholders::_1;
@@ -29,7 +27,6 @@ MasterNodeSingle::MasterNodeSingle(
       "master_node_output", 10);
 
   loop_thread = std::thread(&MasterNodeSingle::loop, this);
-  // loop_thread.detach();
 }
 
 void MasterNodeSingle::shutdown() {
@@ -113,8 +110,6 @@ void MasterNodeSingle::visualize_3d(std::vector<Eigen::Vector3f> &joints,
                                     std::vector<float> &avg_conf) {
   visualization_msgs::msg::MarkerArray marker_array;
 
-  // RCLCPP_WARN(this->get_logger(), "---------------------------");
-
   for (size_t i = 0; i < joints.size(); i++) {
     visualization_msgs::msg::Marker marker;
     marker.header.frame_id = "world";
@@ -138,11 +133,7 @@ void MasterNodeSingle::visualize_3d(std::vector<Eigen::Vector3f> &joints,
     marker.color = color;
 
     marker_array.markers.push_back(marker);
-    // RCLCPP_INFO(this->get_logger(), "Joint %ld: x=%f, y=%f, z=%f", i,
-    // joints[i].x(), joints[i].y(),joints[i].z());
   }
-
-  // RCLCPP_WARN(this->get_logger(), "---------------------------");
 
   // edges
   std::vector<std::pair<int, int>> keypoint_edges = {
@@ -159,7 +150,7 @@ void MasterNodeSingle::visualize_3d(std::vector<Eigen::Vector3f> &joints,
     edge_marker.id = edge_marker_id++;
     edge_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
     edge_marker.action = visualization_msgs::msg::Marker::ADD;
-    edge_marker.scale.x = 0.02; // Line thickness
+    edge_marker.scale.x = 0.02;
 
     // Add the two points that define the edge
     geometry_msgs::msg::Point p1, p2;
@@ -191,7 +182,6 @@ void MasterNodeSingle::visualize_3d(std::vector<Eigen::Vector3f> &joints,
 
   marker_pub_->publish(marker_array);
   last_marker_count_ += joints.size() + keypoint_edges.size();
-  // RCLCPP_INFO(this->get_logger(), "Added %ld markers", last_marker_count_);
 }
 
 float MasterNodeSingle::computeWcj(float s_cj, Eigen::Vector3f joint_3d,
@@ -241,30 +231,11 @@ MasterNodeSingle::iterateWithWeights(const std::vector<float> &confidences) {
 
     // A^T W A
     Eigen::MatrixXf AtWA = A_.transpose() * W * A_;
-    RCLCPP_WARN(this->get_logger(), "B");
 
     // A^T W B
     Eigen::VectorXf AtWB = A_.transpose() * W * B_;
-    RCLCPP_WARN(this->get_logger(), "C");
 
     Eigen::VectorXf X = AtWA.ldlt().solve(AtWB);
-    RCLCPP_WARN(this->get_logger(), "D");
-
-    /*
-    //Old implementation, it is wrong...
-
-    Eigen::MatrixXf A_weighted = A_;
-    Eigen::VectorXf B_weighted = B_;
-
-    for (size_t i = 0; i < weights.size(); i++) {
-      A_weighted.row(2 * i) *= weights[i];
-      A_weighted.row(2 * i + 1) *= weights[i];
-      B_weighted.row(2 * i) *= weights[i];
-      B_weighted.row(2 * i + 1) *= weights[i];
-    }
-
-    X = A_weighted.colPivHouseholderQr().solve(B_weighted);
-    */
   }
 
   return X;

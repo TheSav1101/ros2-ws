@@ -1,14 +1,14 @@
 #ifndef HPE_TEST__MASTER_NODE_SINGLE_HPP_
 #define HPE_TEST__MASTER_NODE_SINGLE_HPP_
 
-#include "hpe_test/visualizer_node.hpp"
+#include <Eigen/Core>
 #include <cv_bridge/cv_bridge.hpp>
 #include <hpe_msgs/msg/slave.hpp>
 #include <hpe_msgs/srv/calibration.hpp>
 #include <hpe_test/calibration.hpp>
+#include <hpe_test/visualizer_node.hpp>
 #include <opencv4/opencv2/opencv.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <regex>
 #include <sensor_msgs/msg/image.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
 #include <std_msgs/msg/string.hpp>
