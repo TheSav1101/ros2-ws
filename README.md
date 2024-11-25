@@ -35,6 +35,7 @@ Install the latest version of ros2-jazzy and test using the premade examples, yo
     sudo apt-get install colcon -y
 
 Install opencv4 and other dependencies
+
     sudo apt update && sudo apt upgrade -y
     sudo apt install cmake git build-essential clang golang -y
     sudo apt install mesa-utils vulkan-tools clinfo -y
