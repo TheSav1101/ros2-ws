@@ -29,7 +29,6 @@ find_package(tensorflowlite REQUIRED)
 #message(WARNING "tensorflowlite_INCLUDE_DIRS: ${tensorflowlite_INCLUDE_DIRS}")
 
 find_package(OpenCV REQUIRED)
-#message(WARNING "OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
 
 find_package(cv_bridge REQUIRED)
 
@@ -42,6 +41,8 @@ find_package(nlohmann_json REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
+find_package(yaml-cpp REQUIRED)
+
 # Include directories
 include_directories(
   include
@@ -51,6 +52,7 @@ include_directories(
   ${std_msgs_INCLUDE_DIRS}
   ${cv_bridge_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
+  ${YAML_CPP_INCLUDE_DIRS}
 )
 
 add_executable(worker src/worker_node_main.cpp src/worker_node.cpp src/data.cpp)
@@ -61,11 +63,7 @@ add_executable(webcam src/webcam_node_main.cpp src/webcam_node.cpp)
 add_executable(slave src/slave_node_main.cpp src/slave_node.cpp src/worker_node.cpp src/webcam_node.cpp src/data.cpp src/responses.cpp)
 add_executable(slave_single src/slave_node_single_main.cpp src/slave_node_single.cpp src/webcam_node.cpp src/data.cpp)
 add_executable(markers src/markers.cpp)
-# Link libraries
-#message(WARNING "MANUALLY ADDED LIBRARIES FOR tensorflowlite")
-#list(APPEND tensorflowlite_LIBRARIES "/usr/lib/libtensorflowlite.so")
-#message(WARNING "tensorflowlite_LIBRARIES: ${tensorflowlite_LIBRARIES}")
-
+add_executable(broadcaster src/tf2_broadcaster_node_main.cpp src/tf2_broadcaster_node.cpp)
 
 target_link_libraries(worker ${tensorflowlite_LIBRARIES})
 target_link_libraries(worker ${OpenCV_LIBS})
@@ -117,6 +115,10 @@ target_link_libraries(slave_single ${sensor_msgs_LIBRARIES})
 target_link_libraries(slave_single ${std_msgs_LIBRARIES})
 target_link_libraries(slave_single ${nlohmann_json_LIBRARIES})
 
+target_link_libraries(broadcaster ${YAML_CPP_LIBRARIES})
+target_link_libraries(broadcaster ${tf2_LIBRARIES})
+target_link_libraries(broadcaster ${tf2_geometry_msgs_LIBRARIES})
+
 ament_target_dependencies(worker rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge)
 ament_target_dependencies(visualizer rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 ament_target_dependencies(master rclcpp std_msgs visualization_msgs sensor_msgs hpe_msgs cv_bridge tf2 tf2_geometry_msgs)
@@ -125,7 +127,7 @@ ament_target_dependencies(webcam rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 ament_target_dependencies(slave rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge tf2 tf2_geometry_msgs)
 ament_target_dependencies(slave_single rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge tf2 tf2_geometry_msgs)
 ament_target_dependencies(markers rclcpp visualization_msgs)
-
+ament_target_dependencies(broadcaster rclcpp tf2_ros geometry_msgs yaml-cpp)
 
 install(TARGETS
   visualizer
@@ -135,6 +137,7 @@ install(TARGETS
   master_single
   webcam
   markers
+  broadcaster
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY include/
