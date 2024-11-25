@@ -263,8 +263,10 @@ void SlaveNode::setupTensors() {
   tflite::ops::builtin::BuiltinOpResolver resolver;
   tflite::InterpreterBuilder builder(*model, resolver);
 
-  auto *delegate = TfLiteGpuDelegateV2Create(/*default options=*/nullptr);
-  builder.AddDelegate(delegate);
+  if (gpu_acceleration) {
+    auto *delegate = TfLiteGpuDelegateV2Create(/*default options=*/nullptr);
+    builder.AddDelegate(delegate);
+  }
 
   // RCLCPP_INFO(this->get_logger(), "Building interpreter...");
   builder(&interpreter);
@@ -343,11 +345,17 @@ void SlaveNode::saveCameraInfo(const sensor_msgs::msg::CameraInfo &msg) {
 SlaveNode::SlaveNode(rclcpp::executors::MultiThreadedExecutor *executor,
                      std::string name, std::string raw_topic, int hpe_model_n_,
                      int detection_model_n_, int starting_workers,
-                     std::string calibration_topic)
+                     std::string calibration_topic, int gpu_support)
     : Node(name), tf_buffer(this->get_clock()), tf_listener(tf_buffer) {
   node_name = name;
 
   executor_ = executor;
+
+  if (gpu_support) {
+    gpu_acceleration = true;
+  } else {
+    gpu_acceleration = false;
+  }
 
   responses_ptrs_ = {};
 

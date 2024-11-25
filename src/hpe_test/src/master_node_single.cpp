@@ -193,11 +193,11 @@ float MasterNodeSingle::computeWcj(float s_cj, Eigen::Vector3f joint_3d,
 
   float d_cj = (joint_3d - camera_pos).norm();
 
-  Eigen::Vector3f dir_to_joint = joint_3d - camera_pos;
-  Eigen::Vector3f camera_view_dir = -R.col(2);
+  // Eigen::Vector3f dir_to_joint = joint_3d - camera_pos;
+  // Eigen::Vector3f camera_view_dir = -R.col(2);
 
-  float cos_theta_cj = camera_view_dir.dot(dir_to_joint) /
-                       (camera_view_dir.norm() * dir_to_joint.norm());
+  // float cos_theta_cj = camera_view_dir.dot(dir_to_joint)
+  // /(camera_view_dir.norm() * dir_to_joint.norm());
 
   // Bound d_cj
   if (0 <= d_cj && d_cj < D_MIN) {

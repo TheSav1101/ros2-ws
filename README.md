@@ -10,28 +10,14 @@ TODO
 
 # Raspberry pi setup guide:
 ---
-Install Ubuntu 24.04 server LTS using rpi-imager and ssh into the raspbery pi, then perform a minimal graphical installation in order to get the necesary packages for GPU support.
+Install Ubuntu 24.04 server LTS using rpi-imager and ssh into the raspbery pi.
 
     sudo apt update && sudo apt upgrade -y
-    sudo apt install ubuntu-desktop-minimal -y
-    sudo apt install lightdm -y
-    sudo systemctl set-default graphical.target
     sudo reboot
 
 Clone this repository
 
     git clone https://github.com/TheSav1101/ros2-ws.git
-
-Install opencv4 and other dependencies
-
-    sudo apt install libopencv-dev python3-opencv nlohmann-json3-dev -y
-    git clone https://github.com/google/flatbuffers.git -b v24.3.25
-    cd flatbuffers
-    mkdir build
-    cd build
-    cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
-    make -j$(nproc)
-    sudo make install
 
 Install the latest version of ros2-jazzy and test using the premade examples, you can follow this guide https://docs.ros.org/en/jazzy/Installation.html
 
@@ -48,10 +34,19 @@ Install the latest version of ros2-jazzy and test using the premade examples, yo
     sudo apt install ros-jazzy-desktop-full -y
     sudo apt-get install colcon -y
 
-Install bazel
-
-    sudo apt install -y golang
-    go install github.com/bazelbuild/bazelisk@latest
+Install opencv4 and other dependencies
+    sudo apt update && sudo apt upgrade -y
+    sudo apt install cmake git build-essential clang golang -y
+    sudo apt install mesa-utils vulkan-tools clinfo -y
+    sudo apt install libegl-dev libegl1-mesa-dev libx11-dev ocl-icd-dev -y
+    sudo apt-get install opencl-headers ocl-icd-opencl-dev libabsl-dev libruy-dev libpthreadpool-dev libxnnpack-dev -y
+    git clone https://github.com/google/flatbuffers.git -b v24.3.25
+    cd flatbuffers
+    mkdir build
+    cd build
+    cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+    make -j$(nproc)
+    sudo make install
 
 Add these lines to ~/.bashrc and restart bash aftewards
 
@@ -60,31 +55,19 @@ Add these lines to ~/.bashrc and restart bash aftewards
     export PATH=$PATH:$(go env GOPATH)/bin
     export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
-Install GPU acceleration support:
+Install bazel
 
-    sudo apt update
-    sudo apt upgrade -y
-    sudo apt install cmake git build-essential clang -y
-    sudo apt install mesa-utils vulkan-tools clinfo -y
-    sudo apt install libegl-dev libegl1-mesa-dev libx11-dev ocl-icd-dev -y
-    sudo apt-get install opencl-headers ocl-icd-opencl-dev libabsl-dev libruy-dev libpthreadpool-dev libxnnpack-dev -y
-    sudo apt install xserver-xorg-video-dummy -y
+    go install github.com/bazelbuild/bazelisk@latest
 
-Check if previous libs are working
-
-    glxinfo | grep "OpenGL"
-    vulkaninfo | grep "Vulkan"
-    clinfo
-
-Download and build tflite
+Download and build tflite 2.17.0
 
     git clone https://github.com/tensorflow/tensorflow.git
     cd tensorflow
-    git checkout v2.17.0 //Required
+    git checkout v2.17.0
 
 Run configuration and set all defaults. Note that you have to invoke bazelisk before it in order to download the package or it won't work
 
-
+    bazelsik
     ./configure
 
 Run builds with bazelisk

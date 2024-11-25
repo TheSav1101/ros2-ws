@@ -36,7 +36,7 @@ public:
   SlaveNode(rclcpp::executors::MultiThreadedExecutor *executor,
             std::string name, std::string raw_topic, int model_,
             int detection_model_, int starting_workers,
-            std::string calibration_topic);
+            std::string calibration_topic, int gpu_support);
   ~SlaveNode();
   void shutdown();
 
@@ -65,6 +65,9 @@ private:
 
   // Flag for calibration options
   std::atomic<bool> calibration_from_json;
+
+  // Flag for gpu support
+  std::atomic<bool> gpu_acceleration;
 
   // transform stuff
   tf2_ros::Buffer tf_buffer;
