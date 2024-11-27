@@ -1,10 +1,12 @@
 #ifndef HPE_TEST__TF2_BROADCASTER_NODE_HPP_
 #define HPE_TEST__TF2_BROADCASTER_NODE_HPP_
 
-#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <tf2_ros/transform_broadcaster.h>
-#include <vector>
+#include <tf2/LinearMath/Transform.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/static_transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 #include <yaml-cpp/yaml.h>
 
 namespace hpe_test {
@@ -13,7 +15,6 @@ public:
   TF2BroadcasterNode();
 
 private:
-  void resend_all();
   void publishTransforms(const YAML::Node &transforms,
                          const std::string &parent_frame);
 
@@ -21,9 +22,10 @@ private:
                         const YAML::Node &transform_info,
                         const std::string &parent_frame);
 
-  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+  std::shared_ptr<tf2_ros::StaticTransformBroadcaster> tf_broadcaster_;
 
-  std::vector<geometry_msgs::msg::TransformStamped> old_msgs;
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener;
 };
 } // namespace hpe_test
 

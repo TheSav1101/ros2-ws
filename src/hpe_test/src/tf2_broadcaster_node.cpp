@@ -4,56 +4,65 @@
 namespace hpe_test {
 
 TF2BroadcasterNode::TF2BroadcasterNode() : Node("tf2_broadcaster") {
-  tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
-  old_msgs = {};
+  tf_buffer = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+  tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
+
+  tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
 
   std::string calibration_file = "./src/hpe_test/calibration/camera_poses.yaml";
 
   YAML::Node calibration_data = YAML::LoadFile(calibration_file);
 
   publishTransforms(calibration_data["poses"], "world");
-  // publishTransforms(calibration_data["inverse_poses"], "world");
-
-  auto timer_ =
-      this->create_wall_timer(std::chrono::milliseconds(5),
-                              std::bind(&TF2BroadcasterNode::resend_all, this));
-}
-
-void TF2BroadcasterNode::resend_all() {
-  for (auto msg : old_msgs) {
-    msg.header.stamp = this->get_clock()->now();
-    tf_broadcaster_->sendTransform(msg);
-  }
 }
 
 void TF2BroadcasterNode::publishTransform(const std::string &child_frame,
                                           const YAML::Node &transform_info,
                                           const std::string &parent_frame) {
-  geometry_msgs::msg::TransformStamped msg;
+  geometry_msgs::msg::TransformStamped msg_;
 
   // Set header
-  msg.header.stamp = this->get_clock()->now();
-  msg.header.frame_id = parent_frame;
+  msg_.header.stamp = this->get_clock()->now();
+  msg_.header.frame_id = parent_frame;
 
   // Set child frame
-  msg.child_frame_id = child_frame;
+  msg_.child_frame_id = child_frame + "_optical_frame";
 
   // Set translation
-  msg.transform.translation.x = transform_info["translation"]["x"].as<double>();
-  msg.transform.translation.y = transform_info["translation"]["y"].as<double>();
-  msg.transform.translation.z = transform_info["translation"]["z"].as<double>();
+  msg_.transform.translation.x =
+      transform_info["translation"]["x"].as<double>();
+  msg_.transform.translation.y =
+      transform_info["translation"]["y"].as<double>();
+  msg_.transform.translation.z =
+      transform_info["translation"]["z"].as<double>();
 
   // Set rotation
-  msg.transform.rotation.x = transform_info["rotation"]["x"].as<double>();
-  msg.transform.rotation.y = transform_info["rotation"]["y"].as<double>();
-  msg.transform.rotation.z = transform_info["rotation"]["z"].as<double>();
-  msg.transform.rotation.w = transform_info["rotation"]["w"].as<double>();
+  msg_.transform.rotation.x = transform_info["rotation"]["x"].as<double>();
+  msg_.transform.rotation.y = transform_info["rotation"]["y"].as<double>();
+  msg_.transform.rotation.z = transform_info["rotation"]["z"].as<double>();
+  msg_.transform.rotation.w = transform_info["rotation"]["w"].as<double>();
 
+  // Get real transforms
+  geometry_msgs::msg::TransformStamped optical_to_link_msg =
+      tf_buffer->lookupTransform(child_frame + "_optical_frame",
+                                 child_frame + "_link", tf2::TimePointZero);
+
+  tf2::Transform w_to_optical, optical_to_link, w_to_link;
+
+  tf2::fromMsg(msg_.transform, w_to_optical);
+  tf2::fromMsg(optical_to_link_msg.transform, optical_to_link);
+
+  w_to_link = w_to_optical * optical_to_link;
   // Publish the transform
+  geometry_msgs::msg::TransformStamped w_to_link_msg;
+  w_to_link_msg.header.stamp = msg_.header.stamp;
+  w_to_link_msg.header.frame_id = parent_frame;
+  w_to_link_msg.child_frame_id = child_frame + "_link";
 
-  old_msgs.push_back(msg);
-  tf_broadcaster_->sendTransform(msg);
+  w_to_link_msg.transform = tf2::toMsg(w_to_link);
+
+  tf_broadcaster_->sendTransform(w_to_link_msg);
 }
 
 void TF2BroadcasterNode::publishTransforms(const YAML::Node &transforms,

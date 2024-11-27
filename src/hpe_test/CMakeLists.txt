@@ -118,6 +118,7 @@ target_link_libraries(slave_single ${nlohmann_json_LIBRARIES})
 target_link_libraries(broadcaster ${YAML_CPP_LIBRARIES})
 target_link_libraries(broadcaster ${tf2_LIBRARIES})
 target_link_libraries(broadcaster ${tf2_geometry_msgs_LIBRARIES})
+target_link_libraries(broadcaster ${geometry_msgs_LIBRARIES})
 
 ament_target_dependencies(worker rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge)
 ament_target_dependencies(visualizer rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
@@ -127,7 +128,7 @@ ament_target_dependencies(webcam rclcpp std_msgs sensor_msgs hpe_msgs cv_bridge)
 ament_target_dependencies(slave rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge tf2 tf2_geometry_msgs)
 ament_target_dependencies(slave_single rclcpp std_msgs sensor_msgs hpe_msgs tensorflowlite cv_bridge tf2 tf2_geometry_msgs)
 ament_target_dependencies(markers rclcpp visualization_msgs)
-ament_target_dependencies(broadcaster rclcpp tf2_ros geometry_msgs yaml-cpp)
+ament_target_dependencies(broadcaster rclcpp tf2_ros tf2_geometry_msgs tf2 geometry_msgs yaml-cpp)
 
 install(TARGETS
   visualizer

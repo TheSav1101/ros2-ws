@@ -1,4 +1,6 @@
 #include <hpe_test/master_node_single.hpp>
+#include <rclcpp/logging.hpp>
+#include <rclcpp/utilities.hpp>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -314,17 +316,22 @@ void MasterNodeSingle::requestCalibration(std::string &service_name) {
   auto request = std::make_shared<hpe_msgs::srv::Calibration::Request>();
 
   // Call the service
-  auto result_future = client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(this->get_node_base_interface(),
-                                         result_future) ==
-      rclcpp::FutureReturnCode::SUCCESS) {
-    auto result = result_future.get();
-    RCLCPP_INFO(this->get_logger(), "Calibration received from %s.",
-                service_name.c_str());
-    slaves_calibration_.push_back(hpe_test::Calibration(result->calibration));
-  } else {
-    RCLCPP_ERROR(this->get_logger(), "Failed to call service %s.",
-                 service_name.c_str());
+  auto future = client->async_send_request(request);
+  int i = 100;
+  while (running_ && rclcpp::ok()) {
+    auto status = future.wait_for(std::chrono::milliseconds(100));
+    if (status == std::future_status::ready) {
+      auto result = future.get();
+      RCLCPP_INFO(this->get_logger(), "Calibration received from %s.",
+                  service_name.c_str());
+      slaves_calibration_.push_back(hpe_test::Calibration(result->calibration));
+    }
+    i--;
+    if (i < 0) {
+      RCLCPP_ERROR(this->get_logger(), "CALIBRATION ERROR FOR NODE %s",
+                   service_name.c_str());
+      break;
+    }
   }
 }
 
