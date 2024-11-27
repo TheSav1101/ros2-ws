@@ -338,7 +338,7 @@ void SlaveNodeSingle::calibrationService(
     std::vector<double> distortion(5);
     std::vector<double> k(9);
     RCLCPP_WARN(this->get_logger(), "...");
-    for (size_t i = 0; i < 5 || i < camera_info.d.size(); i++) {
+    for (size_t i = 0; i < 5 && i < camera_info.d.size(); i++) {
       distortion[i] = camera_info.d[i];
     }
     RCLCPP_WARN(this->get_logger(), "...");
