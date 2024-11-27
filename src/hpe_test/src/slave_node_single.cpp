@@ -334,14 +334,14 @@ void SlaveNodeSingle::calibrationService(
     RCLCPP_WARN(this->get_logger(), "Using topic");
     hpe_msgs::msg::IntrinsicParams intr_prms = hpe_msgs::msg::IntrinsicParams();
     std::string frame_id = camera_info.header.frame_id;
-
+    RCLCPP_WARN(this->get_logger(), "...");
     std::vector<double> distortion(5);
     std::vector<double> k(9);
-
+    RCLCPP_WARN(this->get_logger(), "...");
     for (size_t i = 0; i < 5 || i < camera_info.d.size(); i++) {
       distortion[i] = camera_info.d[i];
     }
-
+    RCLCPP_WARN(this->get_logger(), "...");
     for (size_t row = 0; row < 3; ++row) {
       for (size_t col = 0; col < 3; ++col) {
         k[col * 3 + row] = camera_info.k[row * 3 + col];
@@ -350,7 +350,7 @@ void SlaveNodeSingle::calibrationService(
     RCLCPP_WARN(this->get_logger(), "...");
     intr_prms.distortion_coefficients = distortion;
     intr_prms.camera_matrix = k;
-
+    RCLCPP_WARN(this->get_logger(), "...");
     response->calibration.frame =
         tf_buffer.lookupTransform("world", frame_id, tf2::TimePointZero);
     response->calibration.intrinsic_params = intr_prms;
