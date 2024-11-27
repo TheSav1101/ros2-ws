@@ -1,4 +1,5 @@
 #include <hpe_test/slave_node_single.hpp>
+#include <string>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -139,6 +140,9 @@ void SlaveNodeSingle::callback(const sensor_msgs::msg::Image &msg) {
 
 void SlaveNodeSingle::saveCameraInfo(const sensor_msgs::msg::CameraInfo &msg) {
   camera_info = msg;
+  if (msg.header.frame_id != "") {
+    maybe_frame_id = msg.header.frame_id;
+  }
 }
 
 void SlaveNodeSingle::compressedCallback(
@@ -162,10 +166,11 @@ void SlaveNodeSingle::compressedCallback(
 
 SlaveNodeSingle::SlaveNodeSingle(std::string name, std::string raw_topic,
                                  int hpe_model_n_,
-                                 std::string calibration_topic)
+                                 std::string calibration_topic,
+                                 std::string optical_frame)
     : Node(name), tf_buffer(this->get_clock()), tf_listener(tf_buffer) {
   node_name = name;
-
+  maybe_frame_id = optical_frame;
   avg_delay = 0.0;
   delay_window = 0;
   hpe_model_n = hpe_model_n_;
@@ -334,23 +339,28 @@ void SlaveNodeSingle::calibrationService(
     RCLCPP_WARN(this->get_logger(), "Using topic");
     hpe_msgs::msg::IntrinsicParams intr_prms = hpe_msgs::msg::IntrinsicParams();
     std::string frame_id = camera_info.header.frame_id;
-    RCLCPP_WARN(this->get_logger(), "...");
+
+    // hacky fix
+    if (frame_id == "") {
+      frame_id = maybe_frame_id;
+    }
+
     std::vector<double> distortion(5);
     std::vector<double> k(9);
-    RCLCPP_WARN(this->get_logger(), "...");
+
     for (size_t i = 0; i < 5 && i < camera_info.d.size(); i++) {
       distortion[i] = camera_info.d[i];
     }
-    RCLCPP_WARN(this->get_logger(), "...");
+
     for (size_t row = 0; row < 3; ++row) {
       for (size_t col = 0; col < 3; ++col) {
         k[col * 3 + row] = camera_info.k[row * 3 + col];
       }
     }
-    RCLCPP_WARN(this->get_logger(), "...");
+
     intr_prms.distortion_coefficients = distortion;
     intr_prms.camera_matrix = k;
-    RCLCPP_WARN(this->get_logger(), "...");
+
     response->calibration.frame =
         tf_buffer.lookupTransform("world", frame_id, tf2::TimePointZero);
     response->calibration.intrinsic_params = intr_prms;
