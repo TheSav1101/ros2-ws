@@ -1,4 +1,5 @@
 #include <hpe_test/slave_node.hpp>
+#include <tensorflow/lite/interpreter_options.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -261,11 +262,15 @@ void SlaveNode::setupTensors() {
   }
 
   tflite::ops::builtin::BuiltinOpResolver resolver;
+
   tflite::InterpreterBuilder builder(*model, resolver);
 
   if (gpu_acceleration) {
+    RCLCPP_WARN(this->get_logger(), "Using gpu delegate.");
     auto *delegate = TfLiteGpuDelegateV2Create(/*default options=*/nullptr);
     builder.AddDelegate(delegate);
+  } else {
+    builder.AddDelegate((TfLiteDelegate *)nullptr);
   }
 
   // RCLCPP_INFO(this->get_logger(), "Building interpreter...");
@@ -274,6 +279,12 @@ void SlaveNode::setupTensors() {
   if (!interpreter) {
     RCLCPP_ERROR(this->get_logger(), "ERROR: could not create interpreter...");
     return;
+  }
+
+  if (!gpu_acceleration) {
+    RCLCPP_WARN(this->get_logger(), "Using default delegate.");
+    interpreter->SetNumThreads(4);
+    RCLCPP_WARN(this->get_logger(), "Done");
   }
 
   auto status = interpreter->AllocateTensors();
