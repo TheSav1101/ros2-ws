@@ -50,11 +50,13 @@ Calibration::Calibration(hpe_msgs::msg::Calibration &calibration_msg) {
   projection_ = intrinsics_ * extrinsics_inv;
 
   std::cout << "Projection matrix:\n" << projection_ << std::endl;
+
+  ready = true;
 }
 
 Calibration::~Calibration() {}
 
-Calibration::Calibration() {}
+Calibration::Calibration() { ready = false; }
 
 const Eigen::Matrix4f &Calibration::getExtrinsics() const {
   return extrinsics_;

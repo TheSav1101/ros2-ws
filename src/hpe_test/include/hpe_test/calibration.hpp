@@ -22,6 +22,7 @@ public:
 
   Eigen::Matrix<float, 2, 3> getARows(Eigen::Vector2f p);
   Eigen::Matrix<float, 2, 1> getBRows(Eigen::Vector2f p);
+  bool ready;
 
 private:
   Eigen::Matrix4f extrinsics_;            // wT

@@ -264,8 +264,9 @@ void SlaveNodeSingle::calibrationService(
     [[maybe_unused]],
     std::shared_ptr<hpe_msgs::srv::Calibration::Response> response) {
 
+  RCLCPP_WARN(this->get_logger(), "Starting calibration service");
   if (calibration_from_json) {
-
+    RCLCPP_WARN(this->get_logger(), "Using json");
     std::ifstream file("./calibration/calibration_" + node_name + ".json");
     if (!file.is_open()) {
       RCLCPP_ERROR(this->get_logger(), "FAILED TO OPEN CONFIGURATION FILE!");
@@ -330,7 +331,7 @@ void SlaveNodeSingle::calibrationService(
 
     response->calibration.frame = transform_msg;
   } else {
-
+    RCLCPP_WARN(this->get_logger(), "Using topic");
     hpe_msgs::msg::IntrinsicParams intr_prms = hpe_msgs::msg::IntrinsicParams();
     std::string frame_id = camera_info.header.frame_id;
 
@@ -346,7 +347,7 @@ void SlaveNodeSingle::calibrationService(
         k[col * 3 + row] = camera_info.k[row * 3 + col];
       }
     }
-
+    RCLCPP_WARN(this->get_logger(), "...");
     intr_prms.distortion_coefficients = distortion;
     intr_prms.camera_matrix = k;
 
@@ -363,6 +364,8 @@ void SlaveNodeSingle::calibrationService(
                 camera_info.k[5], camera_info.k[6], camera_info.k[7],
                 camera_info.k[8], k[0], k[1], k[2], k[3], k[4], k[5], k[6],
                 k[7], k[8]);
+
+    RCLCPP_WARN(this->get_logger(), "Calibration finished");
   }
 }
 
