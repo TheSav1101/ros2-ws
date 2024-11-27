@@ -1,5 +1,9 @@
 
 #include <hpe_test/tf2_broadcaster_node.hpp>
+#include <rclcpp/logging.hpp>
+#include <rclcpp/utilities.hpp>
+#include <string>
+#include <tf2/time.h>
 
 namespace hpe_test {
 
@@ -7,6 +11,8 @@ TF2BroadcasterNode::TF2BroadcasterNode() : Node("tf2_broadcaster") {
 
   tf_buffer = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
+
+  rclcpp::sleep_for(std::chrono::seconds(5));
 
   tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
 
@@ -44,9 +50,13 @@ void TF2BroadcasterNode::publishTransform(const std::string &child_frame,
   msg_.transform.rotation.w = transform_info["rotation"]["w"].as<double>();
 
   // Get real transforms
+
+  std::string from = child_frame + "_color_optical_frame";
+  std::string to = child_frame + "_link";
+  RCLCPP_INFO(this->get_logger(), "Getting transforms from %s to %s",
+              from.c_str(), to.c_str());
   geometry_msgs::msg::TransformStamped optical_to_link_msg =
-      tf_buffer->lookupTransform(child_frame + "_optical_frame",
-                                 child_frame + "_link", tf2::TimePointZero);
+      tf_buffer->lookupTransform(from, to, tf2::TimePointZero);
 
   tf2::Transform w_to_optical, optical_to_link, w_to_link;
 

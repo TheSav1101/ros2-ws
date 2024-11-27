@@ -1,3 +1,5 @@
+#include "hpe_msgs/srv/calibration.hpp"
+#include <chrono>
 #include <hpe_test/master_node_single.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/utilities.hpp>
@@ -21,33 +23,27 @@ MasterNodeSingle::MasterNodeSingle(
 
   subscribers_ = {};
   slaves_feedback_ = {};
-  scan_for_slaves();
-  scanner_ = this->create_wall_timer(
-      std::chrono::seconds(2),
-      std::bind(&MasterNodeSingle::scan_for_slaves, this));
+
   marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
       "master_node_output", 10);
 
-  loop_thread = std::thread(&MasterNodeSingle::loop, this);
+  scan_for_slaves();
+
+  scanner_ = this->create_wall_timer(
+      std::chrono::seconds(1),
+      std::bind(&MasterNodeSingle::scan_for_slaves, this));
+
+  loop_ = this->create_wall_timer(std::chrono::milliseconds(15),
+                                  std::bind(&MasterNodeSingle::loop, this));
 }
 
 void MasterNodeSingle::shutdown() {
   RCLCPP_INFO(this->get_logger(), "Shutting down...");
-  running_ = false;
 
-  if (loop_thread.joinable()) {
-    loop_thread.join();
-    RCLCPP_INFO(this->get_logger(), "Loop thread joined...");
-  }
   RCLCPP_WARN(this->get_logger(), "Average FPS loop: %f", 1 / avg_delay);
 }
 
 MasterNodeSingle::~MasterNodeSingle() {
-  running_ = false;
-  if (loop_thread.joinable()) {
-    loop_thread.join();
-    RCLCPP_INFO(this->get_logger(), "Loop thread joined...");
-  }
   RCLCPP_WARN(this->get_logger(), "Average FPS loop: %f", 1 / avg_delay);
 }
 
@@ -57,24 +53,19 @@ void MasterNodeSingle::callback(const hpe_msgs::msg::Slave &msg, int index) {
 }
 
 void MasterNodeSingle::loop() {
-  running_ = true;
-  rclcpp::Rate loop_rate(60);
-  while (running_) {
-    auto start = this->get_clock()->now();
+  auto start = this->get_clock()->now();
 
-    // Filter feedbacks by time
-    filtered_feedbacks = {};
-    camera_indices = {};
-    filterFeedbacks();
+  // Filter feedbacks by time
+  filtered_feedbacks = {};
+  camera_indices = {};
+  filterFeedbacks();
 
-    triangulate_all();
+  triangulate_all();
 
-    double delay = (this->get_clock()->now() - start).seconds();
-    avg_delay = (avg_delay * delay_window + delay);
-    delay_window++;
-    avg_delay /= delay_window;
-    loop_rate.sleep();
-  }
+  double delay = (this->get_clock()->now() - start).seconds();
+  avg_delay = (avg_delay * delay_window + delay);
+  delay_window++;
+  avg_delay /= delay_window;
 }
 
 void MasterNodeSingle::triangulate_all() {
@@ -216,6 +207,11 @@ float MasterNodeSingle::computeWcj(float s_cj, Eigen::Vector3f joint_3d,
 
   // float W_cj = s_cj * (d_cj + (cos_theta_cj * cos_theta_cj)) / 2;
   float W_cj = s_cj * d_cj;
+
+  if (W_cj <= 0.000000000000000000000000001) {
+    W_cj = 0.000000000000000000000000001;
+  }
+
   return W_cj;
 }
 
@@ -297,42 +293,43 @@ void MasterNodeSingle::scan_for_slaves() {
 
       std::string calibration_service_name = "/calibration_" + node_name;
       requestCalibration(calibration_service_name);
-      auto viz = std::make_shared<hpe_test::VisualizerNode>(node_name);
-      visualizers.push_back(viz);
-      executor_->add_node(viz);
+      // auto viz = std::make_shared<hpe_test::VisualizerNode>(node_name);
+      // visualizers.push_back(viz);
+      // executor_->add_node(viz);
     }
   }
 }
 
 void MasterNodeSingle::requestCalibration(std::string &service_name) {
-  auto client = this->create_client<hpe_msgs::srv::Calibration>(service_name);
 
-  if (!client->wait_for_service(std::chrono::seconds(2))) {
+  size_t index = calibration_clients.size();
+  calibration_clients.push_back(
+      this->create_client<hpe_msgs::srv::Calibration>(service_name));
+
+  if (!calibration_clients[index]->wait_for_service(std::chrono::seconds(2))) {
     RCLCPP_WARN(this->get_logger(), "Service %s is not available.",
                 service_name.c_str());
     return;
   }
 
   auto request = std::make_shared<hpe_msgs::srv::Calibration::Request>();
+  size_t i = slaves_calibration_.size();
+  slaves_calibration_.push_back(hpe_test::Calibration());
 
-  // Call the service
-  auto future = client->async_send_request(request);
-  int i = 100;
-  while (running_ && rclcpp::ok()) {
-    auto status = future.wait_for(std::chrono::milliseconds(100));
-    if (status == std::future_status::ready) {
-      auto result = future.get();
-      RCLCPP_INFO(this->get_logger(), "Calibration received from %s.",
-                  service_name.c_str());
-      slaves_calibration_.push_back(hpe_test::Calibration(result->calibration));
-    }
-    i--;
-    if (i < 0) {
-      RCLCPP_ERROR(this->get_logger(), "CALIBRATION ERROR FOR NODE %s",
-                   service_name.c_str());
-      break;
-    }
-  }
+  auto response_received_callback =
+      [this, i, service_name](
+          rclcpp::Client<hpe_msgs::srv::Calibration>::SharedFuture future) {
+        auto result = future.get();
+        slaves_calibration_[i] = hpe_test::Calibration(result->calibration);
+        RCLCPP_INFO(this->get_logger(), "Calibration received from %s.",
+                    service_name.c_str());
+      };
+
+  auto future = calibration_clients[index]->async_send_request(
+      request, response_received_callback);
+
+  RCLCPP_INFO(this->get_logger(), "Calibration requested to %s.",
+              service_name.c_str());
 }
 
 void MasterNodeSingle::buildAB_lists(int joint_n) {

@@ -1,7 +1,9 @@
 #ifndef HPE_TEST__MASTER_NODE_SINGLE_HPP_
 #define HPE_TEST__MASTER_NODE_SINGLE_HPP_
 
+#include "hpe_msgs/srv/calibration.hpp"
 #include <Eigen/Core>
+#include <atomic>
 #include <cv_bridge/cv_bridge.hpp>
 #include <hpe_msgs/msg/slave.hpp>
 #include <hpe_msgs/srv/calibration.hpp>
@@ -12,6 +14,7 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <stdatomic.h>
 #include <vector>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -54,11 +57,7 @@ private:
   int delay_window;
   size_t last_marker_count_ = 0;
 
-  // Loop stuff
-  std::atomic<bool> running_;
-  std::thread loop_thread;
-
-  const float MAX_TIME_DIFF = 0.25;
+  const float MAX_TIME_DIFF = 1.25;
   const int max_iterations = 3;
   const int max_joints = 17;
   const float D_MIN = 1.5;
@@ -76,8 +75,11 @@ private:
   std::vector<hpe_msgs::msg::Slave> slaves_feedback_;
 
   std::vector<hpe_test::Calibration> slaves_calibration_;
+  std::vector<rclcpp::Client<hpe_msgs::srv::Calibration>::SharedPtr>
+      calibration_clients;
 
   rclcpp::TimerBase::SharedPtr scanner_;
+  rclcpp::TimerBase::SharedPtr loop_;
 };
 } // namespace hpe_test
 #endif
