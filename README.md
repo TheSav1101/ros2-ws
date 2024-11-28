@@ -60,11 +60,12 @@ Install bazel
 
     go install github.com/bazelbuild/bazelisk@latest
 
-Download and build tflite 2.17.0
+Download and build tflite
+!!!IMPORTANT!!!
+Use the master version as there are some PR that are not in the release versions and fix yolo...
 
     git clone https://github.com/tensorflow/tensorflow.git
     cd tensorflow
-    git checkout v2.17.0
 
 Run configuration and set all defaults. Note that you have to invoke bazelisk before it in order to download the package or it won't work
 
