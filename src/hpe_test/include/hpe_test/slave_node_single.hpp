@@ -1,15 +1,15 @@
 #ifndef HPE_TEST__SLAVE_NODE_SINGLE_HPP_
 #define HPE_TEST__SLAVE_NODE_SINGLE_HPP_
 
-#include "hpe_msgs/msg/box.hpp"
-#include "hpe_msgs/msg/detection.hpp"
-#include "hpe_msgs/msg/hpe2d.hpp"
-#include "hpe_msgs/msg/slave.hpp"
-#include "hpe_msgs/srv/calibration.hpp"
-#include "hpe_test/data.hpp"
-#include "hpe_test/webcam_node.hpp"
 #include <cv_bridge/cv_bridge.hpp>
 #include <fstream>
+#include <hpe_msgs/msg/box.hpp>
+#include <hpe_msgs/msg/detection.hpp>
+#include <hpe_msgs/msg/hpe2d.hpp>
+#include <hpe_msgs/msg/slave.hpp>
+#include <hpe_msgs/srv/calibration.hpp>
+#include <hpe_test/data.hpp>
+#include <hpe_test/webcam_node.hpp>
 #include <nlohmann/json.hpp>
 #include <opencv4/opencv2/opencv.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -25,7 +25,6 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
-#include <vector>
 
 namespace hpe_test {
 

@@ -53,6 +53,7 @@ include_directories(
   ${cv_bridge_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
   ${YAML_CPP_INCLUDE_DIRS}
+  ${TF_INCLUDE_DIRS}
 )
 
 add_executable(worker src/worker_node_main.cpp src/worker_node.cpp src/data.cpp)

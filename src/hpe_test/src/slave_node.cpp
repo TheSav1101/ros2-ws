@@ -1,5 +1,4 @@
 #include <hpe_test/slave_node.hpp>
-#include <tensorflow/lite/interpreter_options.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -274,7 +273,7 @@ void SlaveNode::setupTensors() {
   }
 
   // RCLCPP_INFO(this->get_logger(), "Building interpreter...");
-  builder(&interpreter);
+  builder(&interpreter, 4);
 
   if (!interpreter) {
     RCLCPP_ERROR(this->get_logger(), "ERROR: could not create interpreter...");

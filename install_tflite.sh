@@ -26,12 +26,13 @@ echo "Installing libtensorflowlite_gpu_delegate.so to ${LIB_DIR}"
 sudo cp ${BUILD_DIR}/tensorflow/lite/delegates/gpu/libtensorflowlite_gpu_delegate.so ${LIB_DIR}
 
 echo "Installing headers to ${INCLUDE_DIR}"
-sudo cp -r ${TFLITE_DIR}/tensorflow/lite ${INCLUDE_DIR}
+sudo cp -r ${TFLITE_DIR}/tensorflow ${INCLUDE_DIR}
 
 echo "Generating CMake configuration file"
 cat <<EOF | sudo tee ${CMAKE_DIR}/tensorflowliteConfig.cmake > /dev/null
 # CMake configuration file for TensorFlow Lite
 set(TFLITE_INCLUDE_DIRS "${INCLUDE_DIR}/lite")
+set(TF_INCLUDE_DIRS "${INCLUDE_DIR}")
 set(TFLITE_LIBRARY "${LIB_DIR}/libtensorflowlite.so")
 set(TFLITE_GPU_DELEGATE_LIBRARY "${LIB_DIR}/libtensorflowlite_gpu_delegate.so")
 
