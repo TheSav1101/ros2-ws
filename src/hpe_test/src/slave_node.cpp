@@ -575,11 +575,6 @@ void SlaveNode::calibrationService(
     hpe_msgs::msg::IntrinsicParams intr_prms = hpe_msgs::msg::IntrinsicParams();
     std::string frame_id = camera_info.header.frame_id;
 
-    // hacky fix
-    if (frame_id == "") {
-      frame_id = maybe_frame_id;
-    }
-
     std::vector<double> distortion(5);
     std::vector<double> k(9);
 

@@ -31,7 +31,7 @@ namespace hpe_test {
 class SlaveNodeSingle : public rclcpp::Node {
 public:
   SlaveNodeSingle(std::string name, std::string raw_topic, int model_,
-                  std::string calibration_topic, std::string optical_frame);
+                  std::string calibration_topic);
   ~SlaveNodeSingle();
   void shutdown();
 
@@ -83,7 +83,6 @@ private:
 
   std::shared_ptr<hpe_test::WebcamNode> webcam_node;
 
-  std::string maybe_frame_id;
   // Metriche fps
   int delay_window;
   double avg_delay;
