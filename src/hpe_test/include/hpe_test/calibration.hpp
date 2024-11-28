@@ -11,7 +11,7 @@ namespace hpe_test {
 
 class Calibration {
 public:
-  Calibration(hpe_msgs::msg::Calibration &calibration_msg);
+  Calibration(const hpe_msgs::msg::Calibration &calibration_msg);
   Calibration();
   ~Calibration();
 

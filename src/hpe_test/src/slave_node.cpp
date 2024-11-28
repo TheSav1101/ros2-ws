@@ -1,9 +1,26 @@
+#include "sensor_msgs/msg/compressed_image.hpp"
 #include <hpe_test/slave_node.hpp>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
 namespace hpe_test {
+
+sensor_msgs::msg::CompressedImage compress_image(const cv::Mat &img) {
+  std::vector<uchar> buffer;
+  std::vector<int> compression_params;
+
+  compression_params = {cv::IMWRITE_JPEG_QUALITY, 90};
+
+  if (!cv::imencode(".jpeg", img, buffer, compression_params)) {
+    throw std::runtime_error("Failed to encode image to .jpeg");
+  }
+  sensor_msgs::msg::CompressedImage compressed_image_msg;
+  compressed_image_msg.format = "jpeg";
+  compressed_image_msg.data = buffer;
+
+  return compressed_image_msg;
+}
 
 float SlaveNode::computeIoU(const float *box1, const float *box2) {
   float half_w1 = box1[2] / 2.0;
@@ -31,10 +48,11 @@ float SlaveNode::computeIoU(const float *box1, const float *box2) {
   return intersectionArea / unionArea;
 }
 
-std::vector<size_t> SlaveNode::nonMaxSuppression(float *boxes, float *scores,
-                                                 size_t numBoxes,
-                                                 float iouThreshold,
-                                                 float minConfidence) {
+std::vector<size_t> SlaveNode::nonMaxSuppression(const float *boxes,
+                                                 const float *scores,
+                                                 const size_t numBoxes,
+                                                 const float iouThreshold,
+                                                 const float minConfidence) {
   std::vector<size_t> indices(numBoxes);
   std::vector<size_t> final_indices;
 
@@ -106,14 +124,15 @@ void SlaveNode::callback(const sensor_msgs::msg::Image &msg) {
     RCLCPP_ERROR(this->get_logger(), "ERROR: Interpreter not initialized");
     return;
   }
+
   if (interpreter->Invoke() != kTfLiteOk) {
     RCLCPP_ERROR(
         this->get_logger(),
         "ERROR: Something went wrong while invoking the interpreter...");
     return;
   }
-  float *boxes = interpreter->typed_output_tensor<float>(0);
-  float *confidence = interpreter->typed_output_tensor<float>(1);
+  const float *boxes = interpreter->typed_output_tensor<float>(0);
+  const float *confidence = interpreter->typed_output_tensor<float>(1);
 
   std::vector<size_t> filtered_indices =
       nonMaxSuppression(boxes, confidence, 2535, 0.25, 0.35);
@@ -134,7 +153,7 @@ void SlaveNode::callback(const sensor_msgs::msg::Image &msg) {
   auto response_received_callback =
       [this, curr_responses](
           rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture future) {
-        RCLCPP_INFO(this->get_logger(), "Executing callback");
+        // RCLCPP_INFO(this->get_logger(), "Executing callback");
         auto result = future.get();
         if (curr_responses->add(result->hpe2d)) {
           all_response_received_callback(curr_responses);
@@ -166,6 +185,7 @@ void SlaveNode::callback(const sensor_msgs::msg::Image &msg) {
     cv::resize(crop, small,
                cv::Size(MODEL_WIDTH[hpe_model_n], MODEL_HEIGHT[hpe_model_n]),
                cv::INTER_LINEAR);
+
     cv_image_msg_bridge =
         cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, small);
     cv_image_msg_bridge.toImageMsg(small_msg);
@@ -207,10 +227,7 @@ void SlaveNode::callback(const sensor_msgs::msg::Image &msg) {
     clients_index++;
   }
 
-  cv_image_msg_bridge =
-      cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, boxes_img);
-  cv_image_msg_bridge.toImageMsg(small_msg);
-  publisher_boxes_->publish(small_msg);
+  publisher_boxes_->publish(compress_image(boxes_img));
   double delay = (this->get_clock()->now() - start).seconds();
   avg_delay = (avg_delay * delay_window + delay);
   delay_window++;
@@ -250,7 +267,6 @@ void SlaveNode::all_response_received_callback(Responses *response) {
 }
 
 void SlaveNode::setupTensors() {
-  // RCLCPP_INFO(this->get_logger(), "Building FlatBufferModel...");
   model = tflite::FlatBufferModel::BuildFromFile(
       DETECTION_MODEL_FILES[detection_model_n].c_str());
   if (!model) {
@@ -261,7 +277,6 @@ void SlaveNode::setupTensors() {
   }
 
   tflite::ops::builtin::BuiltinOpResolver resolver;
-
   tflite::InterpreterBuilder builder(*model, resolver);
 
   if (gpu_acceleration) {
@@ -272,7 +287,6 @@ void SlaveNode::setupTensors() {
     builder.AddDelegate((TfLiteDelegate *)nullptr);
   }
 
-  // RCLCPP_INFO(this->get_logger(), "Building interpreter...");
   builder(&interpreter, 4);
 
   if (!interpreter) {
@@ -297,26 +311,8 @@ void SlaveNode::setupTensors() {
   for (int i = 0; i < num_inputs; ++i) {
     const TfLiteTensor *input_tensor =
         interpreter->tensor(interpreter->inputs()[i]);
-    // RCLCPP_INFO(this->get_logger(), "Input Tensor %d: Type=%d", i,
-    // input_tensor->type); RCLCPP_INFO(this->get_logger(), "Input Tensor %d
-    // Dimensions: ", i);
     for (int j = 0; j < input_tensor->dims->size; ++j) {
       input_size *= input_tensor->dims->data[j];
-      // RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j,
-      // input_tensor->dims->data[j]);
-    }
-  }
-
-  int num_outputs = interpreter->outputs().size();
-  for (int i = 0; i < num_outputs; ++i) {
-    const TfLiteTensor *output_tensor =
-        interpreter->tensor(interpreter->outputs()[i]);
-    // RCLCPP_INFO(this->get_logger(), "Output Tensor %d: Type=%d", i,
-    // output_tensor->type); RCLCPP_INFO(this->get_logger(), "Output Tensor %d
-    // Dimensions: ", i);
-    for (int j = 0; j < output_tensor->dims->size; ++j) {
-      // RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j,
-      // output_tensor->dims->data[j]);
     }
   }
 
@@ -357,8 +353,8 @@ SlaveNode::SlaveNode(rclcpp::executors::MultiThreadedExecutor *executor,
                      int detection_model_n_, int starting_workers,
                      std::string calibration_topic, int gpu_support)
     : Node(name), tf_buffer(this->get_clock()), tf_listener(tf_buffer) {
-  node_name = name;
 
+  node_name = name;
   executor_ = executor;
 
   if (gpu_support) {
@@ -373,8 +369,6 @@ SlaveNode::SlaveNode(rclcpp::executors::MultiThreadedExecutor *executor,
   delay_window = 0;
   avg_delay_total = 0.0;
   delay_window_total = 0;
-
-  futures_vector_queue_ = {};
 
   hpe_model_n = hpe_model_n_;
   detection_model_n = detection_model_n_;
@@ -401,8 +395,8 @@ SlaveNode::SlaveNode(rclcpp::executors::MultiThreadedExecutor *executor,
   }
 
   clients_ = {};
-  publisher_boxes_ =
-      this->create_publisher<sensor_msgs::msg::Image>("/boxes_" + name, 10);
+  publisher_boxes_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
+      "/boxes_" + name, 10);
   publisher_slave_ =
       this->create_publisher<hpe_msgs::msg::Slave>("/slave_" + name, 10);
 

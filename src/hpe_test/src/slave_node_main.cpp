@@ -41,9 +41,7 @@ int main(int argc, char *argv[]) {
   try {
     {
       auto options = rclcpp::ExecutorOptions();
-      // options.callback_priority = RMW_UROS_TASK_PRIORITY_HIGH;
-
-      auto executor = rclcpp::executors::MultiThreadedExecutor(options, 8);
+      auto executor = rclcpp::executors::MultiThreadedExecutor(options, 4);
       auto node = std::make_shared<hpe_test::SlaveNode>(
           &executor, argv[1], argv[2], atoi(argv[3]), atoi(argv[4]),
           starting_workers, calibration_topic, gpu);

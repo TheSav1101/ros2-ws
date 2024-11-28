@@ -16,12 +16,10 @@ const std::vector<std::type_index> MODEL_INPUT = {
     typeid(cv::float16_t)};
 
 const std::vector<std::string> DETECTION_MODEL_FILES = {
-    "./src/hpe_test/detector_models/yolov4-tiny-416.tflite",
-    "./src/hpe_test/detector_models/yolov4-tiny-416-int8.tflite"};
-const std::vector<int> DETECTION_MODEL_WIDTH = {416, 416};
-const std::vector<int> DETECTION_MODEL_HEIGHT = {416, 416};
-const std::vector<std::type_index> DETECTOR_MODEL_INPUT = {typeid(float),
-                                                           typeid(u_int8_t)};
+    "./src/hpe_test/detector_models/yolov4-tiny-416.tflite"};
+const std::vector<int> DETECTION_MODEL_WIDTH = {416};
+const std::vector<int> DETECTION_MODEL_HEIGHT = {416};
+const std::vector<std::type_index> DETECTOR_MODEL_INPUT = {typeid(float)};
 
 const double MIN_SKELETON_CONFIDENCE = 0.5;
 const double MIN_BOX_CONFIDENCE = 0.8;

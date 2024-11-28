@@ -42,9 +42,10 @@ public:
 
 private:
   float computeIoU(const float *box1, const float *box2);
-  std::vector<size_t> nonMaxSuppression(float *boxes, float *scores,
-                                        size_t numBoxes, float iouThreshold,
-                                        float minConfidence);
+  std::vector<size_t> nonMaxSuppression(const float *boxes, const float *scores,
+                                        const size_t numBoxes,
+                                        const float iouThreshold,
+                                        const float minConfidence);
   void create_new_worker();
   void setupTensors();
   void saveCameraInfo(const sensor_msgs::msg::CameraInfo &msg);
@@ -76,7 +77,8 @@ private:
   sensor_msgs::msg::CameraInfo camera_info;
 
   // publishers
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_boxes_;
+  rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr
+      publisher_boxes_;
   rclcpp::Service<hpe_msgs::srv::Calibration>::SharedPtr calibration_service_;
   rclcpp::Publisher<hpe_msgs::msg::Slave>::SharedPtr publisher_slave_;
 
@@ -99,10 +101,6 @@ private:
   // name
   std::string node_name;
 
-  // AIUTO, il multithreading
-  std::queue<std::vector<rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture>>
-      futures_vector_queue_;
-  std::mutex queue_mutex_;
   std::atomic<bool> running_;
   std::vector<Responses *> responses_ptrs_;
 

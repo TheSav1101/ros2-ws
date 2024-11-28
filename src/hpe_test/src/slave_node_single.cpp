@@ -6,8 +6,23 @@ using std::placeholders::_2;
 
 namespace hpe_test {
 
+sensor_msgs::msg::CompressedImage compress_image(const cv::Mat &img) {
+  std::vector<uchar> buffer;
+  std::vector<int> compression_params;
+
+  compression_params = {cv::IMWRITE_JPEG_QUALITY, 90};
+
+  if (!cv::imencode(".jpeg", img, buffer, compression_params)) {
+    throw std::runtime_error("Failed to encode image to .jpeg");
+  }
+  sensor_msgs::msg::CompressedImage compressed_image_msg;
+  compressed_image_msg.format = "jpeg";
+  compressed_image_msg.data = buffer;
+
+  return compressed_image_msg;
+}
+
 void SlaveNodeSingle::setupTensors() {
-  RCLCPP_INFO(this->get_logger(), "Building FlatBufferModel...");
   model =
       tflite::FlatBufferModel::BuildFromFile(MODEL_FILES[hpe_model_n].c_str());
   if (!model) {
@@ -21,8 +36,7 @@ void SlaveNodeSingle::setupTensors() {
   tflite::ops::builtin::BuiltinOpResolver resolver;
   tflite::InterpreterBuilder builder(*model, resolver);
 
-  RCLCPP_INFO(this->get_logger(), "Building interpreter...");
-  builder(&interpreter);
+  builder(&interpreter, 4);
   if (!interpreter) {
     RCLCPP_ERROR(this->get_logger(), "ERROR: could not create interpreter...");
     return;
@@ -33,8 +47,6 @@ void SlaveNodeSingle::setupTensors() {
     RCLCPP_ERROR(this->get_logger(), "ERROR ALLOCATING TENSORS!");
   }
 
-  RCLCPP_INFO(this->get_logger(), "Setting up dimensions...");
-  // interpreter->SetNumThreads(4);
   input_tensor_idx = interpreter->inputs()[0];
   output_tensor_idx = interpreter->outputs()[0];
 
@@ -46,13 +58,8 @@ void SlaveNodeSingle::setupTensors() {
   for (int i = 0; i < num_inputs; ++i) {
     const TfLiteTensor *input_tensor =
         interpreter->tensor(interpreter->inputs()[i]);
-    RCLCPP_INFO(this->get_logger(), "Input Tensor %d: Type=%d", i,
-                input_tensor->type);
-    RCLCPP_INFO(this->get_logger(), "Input Tensor %d Dimensions: ", i);
     for (int j = 0; j < input_tensor->dims->size; ++j) {
       input_size *= input_tensor->dims->data[j];
-      RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j,
-                  input_tensor->dims->data[j]);
     }
   }
 
@@ -60,12 +67,7 @@ void SlaveNodeSingle::setupTensors() {
   for (int i = 0; i < num_outputs; ++i) {
     const TfLiteTensor *output_tensor =
         interpreter->tensor(interpreter->outputs()[i]);
-    RCLCPP_INFO(this->get_logger(), "Output Tensor %d: Type=%d", i,
-                output_tensor->type);
-    RCLCPP_INFO(this->get_logger(), "Output Tensor %d Dimensions: ", i);
     for (int j = 0; j < output_tensor->dims->size; ++j) {
-      RCLCPP_INFO(this->get_logger(), "Dim %d: %d", j,
-                  output_tensor->dims->data[j]);
     }
   }
 
@@ -125,10 +127,7 @@ void SlaveNodeSingle::callback(const sensor_msgs::msg::Image &msg) {
   slave_msg.skeletons_n = all_joints.size();
   publisher_slave_->publish(slave_msg);
 
-  cv_image_msg_bridge = cv_bridge::CvImage(
-      msg.header, sensor_msgs::image_encodings::BGR8, cv_ptr->image);
-  cv_image_msg_bridge.toImageMsg(small_msg);
-  publisher_boxes_->publish(small_msg);
+  publisher_boxes_->publish(compress_image(cv_ptr->image));
 
   double delay = (this->get_clock()->now() - start).seconds();
   avg_delay = (avg_delay * delay_window + delay);
@@ -161,9 +160,10 @@ void SlaveNodeSingle::compressedCallback(
   callback(img_msg);
 }
 
-SlaveNodeSingle::SlaveNodeSingle(std::string name, std::string raw_topic,
-                                 int hpe_model_n_,
-                                 std::string calibration_topic)
+SlaveNodeSingle::SlaveNodeSingle(const std::string name,
+                                 const std::string raw_topic,
+                                 const int hpe_model_n_,
+                                 const std::string calibration_topic)
     : Node(name), tf_buffer(this->get_clock()), tf_listener(tf_buffer) {
   node_name = name;
   avg_delay = 0.0;
@@ -184,8 +184,8 @@ SlaveNodeSingle::SlaveNodeSingle(std::string name, std::string raw_topic,
             calibration_topic, 10,
             std::bind(&SlaveNodeSingle::saveCameraInfo, this, _1));
 
-  publisher_boxes_ =
-      this->create_publisher<sensor_msgs::msg::Image>("/boxes_" + name, 10);
+  publisher_boxes_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
+      "/boxes_" + name, 10);
   publisher_slave_ =
       this->create_publisher<hpe_msgs::msg::Slave>("/slave_" + name, 10);
 
@@ -311,7 +311,7 @@ void SlaveNodeSingle::calibrationService(
     transform_msg.transform.translation.y = extrinsic_json[1][3]; // t2
     transform_msg.transform.translation.z = extrinsic_json[2][3]; // t3
 
-    // Convert the rotation matrix (top-left 3x3) to a quaternion
+    // Convert the rotation matrix to a quaternion
     tf2::Matrix3x3 rotation_matrix(
         extrinsic_json[0][0], extrinsic_json[0][1], extrinsic_json[0][2],
         extrinsic_json[1][0], extrinsic_json[1][1], extrinsic_json[1][2],

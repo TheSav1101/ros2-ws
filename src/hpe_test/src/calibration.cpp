@@ -1,7 +1,7 @@
 #include <hpe_test/calibration.hpp>
 
 namespace hpe_test {
-Calibration::Calibration(hpe_msgs::msg::Calibration &calibration_msg) {
+Calibration::Calibration(const hpe_msgs::msg::Calibration &calibration_msg) {
 
   extrinsics_ = Eigen::Matrix4f::Identity();
 

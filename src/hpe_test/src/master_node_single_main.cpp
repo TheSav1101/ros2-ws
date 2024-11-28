@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
       rclcpp::executors::MultiThreadedExecutor executor;
       auto node = std::make_shared<hpe_test::MasterNodeSingle>(name, &executor);
       executor.add_node(node);
-      rclcpp::Rate rate(30);
+      rclcpp::Rate rate(15);
       while (keep_running.load() && rclcpp::ok()) {
         executor.spin_some();
         rate.sleep();

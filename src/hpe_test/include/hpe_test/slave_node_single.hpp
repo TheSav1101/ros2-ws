@@ -30,8 +30,8 @@ namespace hpe_test {
 
 class SlaveNodeSingle : public rclcpp::Node {
 public:
-  SlaveNodeSingle(std::string name, std::string raw_topic, int model_,
-                  std::string calibration_topic);
+  SlaveNodeSingle(const std::string name, const std::string raw_topic,
+                  const int model_, const std::string calibration_topic);
   ~SlaveNodeSingle();
   void shutdown();
 
@@ -49,7 +49,8 @@ private:
   int hpe_model_n = 0;
 
   // publishers
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_boxes_;
+  rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr
+      publisher_boxes_;
   rclcpp::Publisher<hpe_msgs::msg::Slave>::SharedPtr publisher_slave_;
   rclcpp::Service<hpe_msgs::srv::Calibration>::SharedPtr calibration_service_;
 

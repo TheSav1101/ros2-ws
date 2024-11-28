@@ -1,8 +1,5 @@
-#include "hpe_msgs/srv/calibration.hpp"
-#include <chrono>
 #include <hpe_test/master_node_single.hpp>
 #include <rclcpp/logging.hpp>
-#include <rclcpp/utilities.hpp>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -10,7 +7,7 @@ using std::placeholders::_2;
 namespace hpe_test {
 
 MasterNodeSingle::MasterNodeSingle(
-    std::string name, rclcpp::executors::MultiThreadedExecutor *executor)
+    const std::string name, rclcpp::executors::MultiThreadedExecutor *executor)
     : Node(name) {
   avg_delay = 0.0;
   delay_window = 0;
@@ -77,7 +74,7 @@ void MasterNodeSingle::triangulate_all() {
 
   std::vector<Eigen::Vector3f> joints3d = {};
   std::vector<float> avg_conf = {};
-
+  float very_avg_conf = 0.0;
   for (int i = 0; i < max_joints; i++) {
     std::vector<float> confidences = {};
     float avg_conf_ = 0.0;
@@ -94,9 +91,15 @@ void MasterNodeSingle::triangulate_all() {
     joints3d.push_back(iterateWithWeights(confidences));
 
     avg_conf.push_back(avg_conf_);
-  }
 
-  visualize_3d(joints3d, avg_conf);
+    very_avg_conf += avg_conf_;
+  }
+  very_avg_conf /= max_joints;
+  if (very_avg_conf >= 0.2)
+    visualize_3d(joints3d, avg_conf);
+  else
+    RCLCPP_WARN(this->get_logger(), "Confidence too low to publish markers: %f",
+                very_avg_conf);
 }
 
 void MasterNodeSingle::visualize_3d(std::vector<Eigen::Vector3f> &joints,
@@ -177,8 +180,9 @@ void MasterNodeSingle::visualize_3d(std::vector<Eigen::Vector3f> &joints,
   last_marker_count_ += joints.size() + keypoint_edges.size();
 }
 
-float MasterNodeSingle::computeWcj(float s_cj, Eigen::Vector3f joint_3d,
-                                   Eigen::Matrix4f extrinsic_matrix) {
+float MasterNodeSingle::computeWcj(const float &s_cj,
+                                   const Eigen::Vector3f &joint_3d,
+                                   const Eigen::Matrix4f &extrinsic_matrix) {
   Eigen::Matrix3f R = extrinsic_matrix.block<3, 3>(0, 0);
   Eigen::Vector3f t = extrinsic_matrix.block<3, 1>(0, 3);
 
@@ -186,13 +190,6 @@ float MasterNodeSingle::computeWcj(float s_cj, Eigen::Vector3f joint_3d,
 
   float d_cj = (joint_3d - camera_pos).norm();
 
-  // Eigen::Vector3f dir_to_joint = joint_3d - camera_pos;
-  // Eigen::Vector3f camera_view_dir = -R.col(2);
-
-  // float cos_theta_cj = camera_view_dir.dot(dir_to_joint)
-  // /(camera_view_dir.norm() * dir_to_joint.norm());
-
-  // Bound d_cj
   if (0 <= d_cj && d_cj < D_MIN) {
     d_cj /= D_MIN;
   } else if (D_MIN <= d_cj && d_cj < D_MAX) {
@@ -205,11 +202,10 @@ float MasterNodeSingle::computeWcj(float s_cj, Eigen::Vector3f joint_3d,
     d_cj = 0;
   }
 
-  // float W_cj = s_cj * (d_cj + (cos_theta_cj * cos_theta_cj)) / 2;
   float W_cj = s_cj * d_cj;
 
-  if (W_cj <= 0.000000000000000000000000001) {
-    W_cj = 0.000000000000000000000000001;
+  if (W_cj <= 0.00000000000000000000000000001) {
+    W_cj = 0.00000000000000000000000000001;
   }
 
   return W_cj;
@@ -293,14 +289,14 @@ void MasterNodeSingle::scan_for_slaves() {
 
       std::string calibration_service_name = "/calibration_" + node_name;
       requestCalibration(calibration_service_name);
-      // auto viz = std::make_shared<hpe_test::VisualizerNode>(node_name);
-      // visualizers.push_back(viz);
-      // executor_->add_node(viz);
+      auto viz = std::make_shared<hpe_test::VisualizerNode>(node_name);
+      visualizers.push_back(viz);
+      executor_->add_node(viz);
     }
   }
 }
 
-void MasterNodeSingle::requestCalibration(std::string &service_name) {
+void MasterNodeSingle::requestCalibration(const std::string &service_name) {
 
   size_t index = calibration_clients.size();
   calibration_clients.push_back(
@@ -332,7 +328,7 @@ void MasterNodeSingle::requestCalibration(std::string &service_name) {
               service_name.c_str());
 }
 
-void MasterNodeSingle::buildAB_lists(int joint_n) {
+void MasterNodeSingle::buildAB_lists(const int joint_n) {
 
   int num_rows = filtered_feedbacks.size() * 2;
 
