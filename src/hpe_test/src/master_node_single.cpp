@@ -22,7 +22,7 @@ MasterNodeSingle::MasterNodeSingle(
   slaves_feedback_ = {};
 
   marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
-      "master_node_output", 10);
+      "master_node_output", rclcpp::QoS(10));
 
   scan_for_slaves();
 
@@ -51,12 +51,10 @@ void MasterNodeSingle::callback(const hpe_msgs::msg::Slave &msg, int index) {
 
 void MasterNodeSingle::loop() {
   auto start = this->get_clock()->now();
-
   // Filter feedbacks by time
   filtered_feedbacks = {};
   camera_indices = {};
   filterFeedbacks();
-
   triangulate_all();
 
   double delay = (this->get_clock()->now() - start).seconds();
@@ -66,7 +64,6 @@ void MasterNodeSingle::loop() {
 }
 
 void MasterNodeSingle::triangulate_all() {
-
   if (filtered_feedbacks.size() <= 1) {
     RCLCPP_WARN(this->get_logger(), "Too few responses: %ld",
                 filtered_feedbacks.size());
@@ -255,12 +252,25 @@ void MasterNodeSingle::filterFeedbacks() {
     rclcpp::Duration time_diff =
         current_time - slaves_feedback_[i].header.stamp;
 
-    if (time_diff.seconds() <= MAX_TIME_DIFF) {
+    if (time_diff.seconds() <= MAX_TIME_DIFF &&
+        slaves_calibration_[i].isReady()) {
       filtered_feedbacks.push_back(slaves_feedback_[i]);
       camera_indices.push_back(i);
     } else {
-      RCLCPP_WARN(this->get_logger(), "time diff for %ld is %f", i,
-                  time_diff.seconds());
+      rclcpp::Duration time_diff2 =
+          (rclcpp::Time)slaves_feedback_[i].header.stamp - current_time;
+      if (time_diff2.seconds() <= MAX_TIME_DIFF &&
+          slaves_calibration_[i].isReady()) {
+        filtered_feedbacks.push_back(slaves_feedback_[i]);
+        camera_indices.push_back(i);
+      } else {
+        rclcpp::Duration time_diff3 = time_diff2;
+        if (time_diff < time_diff2)
+          time_diff3 = time_diff;
+
+        RCLCPP_WARN(this->get_logger(), "time diff for %s is %f",
+                    subscribed_topics_names_[i].c_str(), time_diff3.seconds());
+      }
     }
   }
 }
@@ -273,8 +283,9 @@ void MasterNodeSingle::scan_for_slaves() {
     std::smatch match;
 
     if (std::regex_match(topic_name, match, std::regex("(/slave_)(.*)")) &&
-        subscribed_topics_names_.find(topic_name) ==
-            subscribed_topics_names_.end()) {
+        std::find(subscribed_topics_names_.begin(),
+                  subscribed_topics_names_.end(),
+                  topic_name) == subscribed_topics_names_.end()) {
       std::string node_name = match[2].str();
       RCLCPP_INFO(this->get_logger(), "Subscribing to topic: %s",
                   topic_name.c_str());
@@ -284,12 +295,12 @@ void MasterNodeSingle::scan_for_slaves() {
       slaves_feedback_.push_back(hpe_msgs::msg::Slave());
 
       auto sub = this->create_subscription<hpe_msgs::msg::Slave>(
-          topic_name, 10,
+          topic_name, rclcpp::QoS(2),
           [this, index, topic_name](const hpe_msgs::msg::Slave::SharedPtr msg) {
             this->callback(*msg, index);
           });
       subscribers_.push_back(sub);
-      subscribed_topics_names_.insert(topic_name);
+      subscribed_topics_names_.push_back(topic_name);
 
       std::string calibration_service_name = "/calibration_" + node_name;
       requestCalibration(calibration_service_name);

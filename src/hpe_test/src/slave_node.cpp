@@ -1,5 +1,6 @@
 #include "sensor_msgs/msg/compressed_image.hpp"
 #include <hpe_test/slave_node.hpp>
+#include <rclcpp/qos.hpp>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -375,7 +376,7 @@ SlaveNode::SlaveNode(rclcpp::executors::MultiThreadedExecutor *executor,
   if (!calibration_from_json)
     subscription_info_ =
         this->create_subscription<sensor_msgs::msg::CameraInfo>(
-            calibration_topic, 10,
+            calibration_topic, rclcpp::QoS(2),
             std::bind(&SlaveNode::saveCameraInfo, this, _1));
 
   if (hpe_model_n < 0 || (size_t)hpe_model_n > MODEL_FILES.size()) {
@@ -393,7 +394,7 @@ SlaveNode::SlaveNode(rclcpp::executors::MultiThreadedExecutor *executor,
 
   clients_ = {};
   publisher_boxes_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
-      "/boxes_" + name, 10);
+      "/boxes_" + name, rclcpp::QoS(2));
   publisher_slave_ =
       this->create_publisher<hpe_msgs::msg::Slave>("/slave_" + name, 10);
 
@@ -414,14 +415,15 @@ SlaveNode::SlaveNode(rclcpp::executors::MultiThreadedExecutor *executor,
       for (const auto &topic_type : topics[raw_topic])
         if (topic_type == "sensor_msgs/msg/Image") {
           subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-              raw_topic, 10, std::bind(&SlaveNode::callback, this, _1));
+              raw_topic, rclcpp::QoS(2),
+              std::bind(&SlaveNode::callback, this, _1));
           RCLCPP_INFO(this->get_logger(),
                       "Ready, raw topic is sensor_msgs/msg/Imag");
           break;
         } else if (topic_type == "sensor_msgs/msg/CompressedImage") {
           compressed_image_sub_ =
               this->create_subscription<sensor_msgs::msg::CompressedImage>(
-                  raw_topic, 10,
+                  raw_topic, rclcpp::QoS(2),
                   std::bind(&SlaveNode::compressedCallback, this, _1));
           RCLCPP_INFO(this->get_logger(),
                       "Ready, raw topic is sensor_msgs/msg/CompressedImage");
@@ -442,7 +444,8 @@ SlaveNode::SlaveNode(rclcpp::executors::MultiThreadedExecutor *executor,
     executor_->add_node(webcam_node);
 
     subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-        "/webcam_" + name, 10, std::bind(&SlaveNode::callback, this, _1));
+        "/webcam_" + name, rclcpp::QoS(2),
+        std::bind(&SlaveNode::callback, this, _1));
   }
 }
 

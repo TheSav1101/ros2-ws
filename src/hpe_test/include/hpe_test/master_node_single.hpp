@@ -65,7 +65,7 @@ private:
 
   std::vector<rclcpp::Subscription<hpe_msgs::msg::Slave>::SharedPtr>
       subscribers_ = {};
-  std::set<std::string> subscribed_topics_names_;
+  std::vector<std::string> subscribed_topics_names_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
       marker_pub_;
 

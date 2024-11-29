@@ -22,12 +22,13 @@ public:
 
   Eigen::Matrix<float, 2, 3> getARows(Eigen::Vector2f p);
   Eigen::Matrix<float, 2, 1> getBRows(Eigen::Vector2f p);
-  bool ready;
+  bool isReady() { return ready; };
 
 private:
   Eigen::Matrix4f extrinsics_;            // wT
   Eigen::Matrix<float, 3, 4> intrinsics_; // I
   Eigen::Matrix<float, 3, 4> projection_; // M
+  bool ready;
 };
 } // namespace hpe_test
 

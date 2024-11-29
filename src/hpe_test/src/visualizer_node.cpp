@@ -90,14 +90,15 @@ VisualizerNode::VisualizerNode(const std::string name)
   delay_window = 0;
   avg_delay = 0.0;
   publisher_ = this->create_publisher<sensor_msgs::msg::Image>(
-      "/hpe_visual_" + name, 10);
+      "/hpe_visual_" + name, rclcpp::QoS(2));
 
   subscription_slave_ = this->create_subscription<hpe_msgs::msg::Slave>(
-      "/slave_" + name, 10, std::bind(&VisualizerNode::callback2d, this, _1));
+      "/slave_" + name, rclcpp::QoS(2),
+      std::bind(&VisualizerNode::callback2d, this, _1));
 
   subscription_image_ =
       this->create_subscription<sensor_msgs::msg::CompressedImage>(
-          "/boxes_" + name, 10,
+          "/boxes_" + name, rclcpp::QoS(2),
           std::bind(&VisualizerNode::image_callback, this, _1));
 }
 }; // namespace hpe_test
