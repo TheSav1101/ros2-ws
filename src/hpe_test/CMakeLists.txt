@@ -5,28 +5,17 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
 
 find_package(rclcpp REQUIRED)
-#message(WARNING "rclcpp_INCLUDE_DIRS: ${rclcpp_INCLUDE_DIRS}")
 
 find_package(std_msgs REQUIRED)
 
 find_package(visualization_msgs REQUIRED)
-#message(WARNING "std_msgs_INCLUDE_DIRS: ${std_msgs_INCLUDE_DIRS}")
 
 find_package(sensor_msgs REQUIRED)
-#message(WARNING "sensor_msgs_INCLUDE_DIRS: ${sensor_msgs_INCLUDE_DIRS}")
 
 find_package(tensorflowlite REQUIRED)
-#find_package(tensorflowlite_gpu_delegate REQUIRED)
-#list(APPEND tensorflowlite_INCLUDE_DIRS "/usr/include/tensorflow")
-#message(WARNING "MANUALLY ADDED INCLUDE DIRECTORIES FOR tensorflowlite")
-#message(WARNING "tensorflowlite_INCLUDE_DIRS: ${tensorflowlite_INCLUDE_DIRS}")
 
 find_package(OpenCV REQUIRED)
 
@@ -39,6 +28,7 @@ find_package(Eigen3 REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
 find_package(tf2 REQUIRED)
+
 find_package(tf2_geometry_msgs REQUIRED)
 
 find_package(yaml-cpp REQUIRED)

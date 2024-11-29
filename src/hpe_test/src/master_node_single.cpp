@@ -68,7 +68,8 @@ void MasterNodeSingle::loop() {
 void MasterNodeSingle::triangulate_all() {
 
   if (filtered_feedbacks.size() <= 1) {
-    RCLCPP_WARN(this->get_logger(), "No good slave respones yet");
+    RCLCPP_WARN(this->get_logger(), "Too few responses: %ld",
+                filtered_feedbacks.size());
     return;
   }
 
@@ -257,6 +258,9 @@ void MasterNodeSingle::filterFeedbacks() {
     if (time_diff.seconds() <= MAX_TIME_DIFF) {
       filtered_feedbacks.push_back(slaves_feedback_[i]);
       camera_indices.push_back(i);
+    } else {
+      RCLCPP_WARN(this->get_logger(), "time diff for %ld is %f", i,
+                  time_diff.seconds());
     }
   }
 }

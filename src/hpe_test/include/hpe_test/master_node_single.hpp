@@ -54,7 +54,7 @@ private:
   int delay_window;
   size_t last_marker_count_ = 0;
 
-  const float MAX_TIME_DIFF = 1.25;
+  const float MAX_TIME_DIFF = 5;
   const int max_iterations = 3;
   const int max_joints = 17;
   const float D_MIN = 1.2;
