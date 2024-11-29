@@ -153,7 +153,6 @@ void SlaveNode::callback(const sensor_msgs::msg::Image &msg) {
   auto response_received_callback =
       [this, curr_responses](
           rclcpp::Client<hpe_msgs::srv::Estimate>::SharedFuture future) {
-        // RCLCPP_INFO(this->get_logger(), "Executing callback");
         auto result = future.get();
         if (curr_responses->add(result->hpe2d)) {
           all_response_received_callback(curr_responses);
@@ -232,8 +231,6 @@ void SlaveNode::callback(const sensor_msgs::msg::Image &msg) {
   avg_delay = (avg_delay * delay_window + delay);
   delay_window++;
   avg_delay /= delay_window;
-  RCLCPP_INFO(this->get_logger(), "%d: ppl found=%ld, FPS=%f", delay_window,
-              filtered_indices.size(), 1 / delay);
 }
 
 void SlaveNode::all_response_received_callback(Responses *response) {
