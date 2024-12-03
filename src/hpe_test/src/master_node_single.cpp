@@ -1,8 +1,4 @@
 #include <hpe_test/master_node_single.hpp>
-#include <rclcpp/logging.hpp>
-
-using std::placeholders::_1;
-using std::placeholders::_2;
 
 namespace hpe_test {
 
@@ -46,7 +42,7 @@ MasterNodeSingle::~MasterNodeSingle() {
 
 void MasterNodeSingle::callback(const hpe_msgs::msg::Slave &msg, int index) {
   slaves_feedback_[index] = msg;
-  RCLCPP_INFO(this->get_logger(), "Recived from %d", index);
+  // RCLCPP_INFO(this->get_logger(), "Recived from %d", index);
 }
 
 void MasterNodeSingle::loop() {
@@ -69,6 +65,13 @@ void MasterNodeSingle::triangulate_all() {
                 filtered_feedbacks.size());
     return;
   }
+  std::string s = "";
+
+  for (size_t i : camera_indices) {
+    s += " " + subscribed_topics_names_[i];
+  }
+
+  RCLCPP_INFO(this->get_logger(), "Using responses from %s", s.c_str());
 
   std::vector<Eigen::Vector3f> joints3d = {};
   std::vector<float> avg_conf = {};
@@ -251,6 +254,9 @@ void MasterNodeSingle::filterFeedbacks() {
   for (size_t i = 0; i < slaves_feedback_.size(); i++) {
     rclcpp::Duration time_diff =
         current_time - slaves_feedback_[i].header.stamp;
+
+    if (!slaves_feedback_[i].all_joints.size())
+      continue;
 
     if (time_diff.seconds() <= MAX_TIME_DIFF &&
         slaves_calibration_[i].isReady()) {
