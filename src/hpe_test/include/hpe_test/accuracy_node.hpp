@@ -25,7 +25,7 @@ private:
 
   const double MIN_HIGH_CONF = 0.5;
 
-  const double DISTANCE_THRESHOLD = 0.3;
+  const double DISTANCE_THRESHOLD = 0.2;
 
   visualization_msgs::msg::MarkerArray last_network;
 
